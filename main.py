@@ -58,7 +58,7 @@ class ClassLogs:
 
     def return_output_line(self):
         return (f"{self.cnt_images}/{self.images_number};"
-                f"{(cnt_images * 100 / parameters.images_number):.2f} %;"
+                f"{(cnt_images * 100 / parameters.images_number):.2f}%;"
                 f"center(x,y)=({self.current_center_x},{self.current_center_y});"
                 f"nearest_bright(x,y)=({self.nearest_bright_x},{self.nearest_bright_y});"
                 f"x(min,max)=({self.current_xmin},{self.current_xmax});"
@@ -74,7 +74,8 @@ class ClassLogs:
 
 # Globales
 command = ClassCommand.MAKE_ALL
-debug = ClassDebug.ALL
+debug = ClassDebug.WRITE_LOGS
+
 parameters = ClassParameters()
 logs = ClassLogs()
 
@@ -148,7 +149,7 @@ if __name__ == '__main__':
     parameters.start_xmax = 1.25
     parameters.start_ymin = -1.25
     parameters.start_ymax = 1.25
-    parameters.zoom_amount = 0.90
+    parameters.zoom_amount = 0.99
     parameters.max_iteration = 256
     parameters.R = 3
     parameters.G = 2
@@ -248,6 +249,15 @@ if __name__ == '__main__':
             if (debug == ClassDebug.ALL) or (debug == ClassDebug.WRITE_LOGS):
                 logs.write_logs(log_line)
 
+            # Calculate center
+            bright_x, bright_y = bright_point
+            fractal_x = (xmin + (bright_x * ((xmax - xmin) / parameters.size_x)))
+            fractal_y = (ymax - (bright_y * ((ymax - ymin) / parameters.size_y)))
+            width = xmax - xmin
+            height = ymax - ymin
+            xmin, xmax = (fractal_x - (width / 2)), (fractal_x + (width / 2))
+            ymin, ymax = (fractal_y - (height / 2)), (fractal_y + (height / 2))
+
             # Calculate next zoom
             width = xmax - xmin
             height = ymax - ymin
@@ -267,7 +277,7 @@ if __name__ == '__main__':
     if (command == ClassCommand.MAKE_VIDEO) or (command == ClassCommand.MAKE_ALL):
 
         # Sort images for output video
-        images = sorted([img for img in os.listdir(parameters.output_folder_pathname) if img.endswith(".png")])
+        images = sorted([img for img in os.listdir(parameters.output_folder_pathname) if (img.endswith(".png")) and (img.startswith("julia_zoom_"))])
 
         # Create output video
         with imageio.get_writer(f"{parameters.output_folder_pathname}/julia.mp4", fps=parameters.fps) as writer:
