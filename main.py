@@ -2,6 +2,7 @@ import os
 import shutil
 import math
 import sys
+import time
 from collections import deque
 import imageio.v2
 from enum import Enum
@@ -45,6 +46,7 @@ class ClassLogs:
     logs_filename = "logs.txt"
 
     def __init__(self):
+        self.start_time = None
         self.images_number = 0
         self.cnt_images = 0
         self.current_center_x = 0
@@ -57,7 +59,14 @@ class ClassLogs:
         self.current_ymax = 0.0
 
     def return_output_line(self):
-        return (f"{self.cnt_images}/{self.images_number};"
+        elapsed_time = time.time() - self.start_time
+
+        hours = int(elapsed_time // 3600)
+        minutes = int((elapsed_time % 3600) // 60)
+        seconds = int(elapsed_time % 60)
+
+        return (f"{hours:02d}h{minutes:02d}m{seconds:02d}s;"
+                f"{self.cnt_images}/{self.images_number};"
                 f"{(cnt_images * 100 / parameters.images_number):.2f}%;"
                 f"center(x,y)=({self.current_center_x},{self.current_center_y});"
                 f"nearest_bright(x,y)=({self.nearest_bright_x},{self.nearest_bright_y});"
@@ -149,14 +158,15 @@ if __name__ == '__main__':
     parameters.start_xmax = 1.25
     parameters.start_ymin = -1.25
     parameters.start_ymax = 1.25
-    parameters.zoom_amount = 0.99
+    parameters.zoom_amount = 0.975
     parameters.max_iteration = 256
-    parameters.R = 3
-    parameters.G = 2
-    parameters.B = 1
+    parameters.R = 15
+    parameters.G = 25
+    parameters.B = 18
     parameters.output_folder_pathname = "output"
     parameters.images_number = 4320
     parameters.fps = 24
+
     logs.images_number = parameters.images_number
 
     # Prepare output folder
@@ -178,6 +188,8 @@ if __name__ == '__main__':
         center_x, center_y = parameters.size_x // 2, parameters.size_y // 2
         logs.current_center_x = center_x
         logs.current_center_y = center_y
+
+        logs.start_time = time.time()
 
         for frame in range(parameters.images_number):
 
