@@ -41,6 +41,7 @@ class ClassParameters:
         self.output_folder_pathname = ""
         self.images_number = 0
         self.fps = 0
+        self.reverse_video = 0
 
 class ClassLogs:
     logs_filename = "logs.txt"
@@ -171,6 +172,7 @@ if __name__ == '__main__':
     parameters.output_folder_pathname = "output"
     parameters.images_number = 4320
     parameters.fps = 24
+    parameters.reverse_video = 0
 
     logs.images_number = parameters.images_number
 
@@ -297,7 +299,10 @@ if __name__ == '__main__':
     if (command == ClassCommand.MAKE_VIDEO) or (command == ClassCommand.MAKE_ALL):
 
         # Sort images for output video
-        images = sorted([img for img in os.listdir(parameters.output_folder_pathname) if (img.endswith(".png")) and (img.startswith("julia_zoom_"))])
+        if parameters.reverse_video == 0:
+            images = sorted([img for img in os.listdir(parameters.output_folder_pathname) if (img.endswith(".png")) and (img.startswith("julia_zoom_"))])
+        else:
+            images = sorted([img for img in os.listdir(parameters.output_folder_pathname) if (img.endswith(".png")) and (img.startswith("julia_zoom_"))], reverse=True)
 
         # Create output video
         with imageio.get_writer(f"{parameters.output_folder_pathname}/julia.mp4", fps=parameters.fps) as writer:
