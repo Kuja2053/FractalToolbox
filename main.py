@@ -3,6 +3,7 @@ import shutil
 import math
 import sys
 import time
+import xml.etree.ElementTree as ET
 from collections import deque
 import imageio.v2
 from enum import Enum
@@ -47,7 +48,6 @@ class ClassLogs:
     logs_filename = "logs.txt"
 
     def __init__(self):
-        self.start_time = None
         self.images_number = 0
         self.cnt_images = 0
         self.current_center_x = 0
@@ -59,9 +59,7 @@ class ClassLogs:
         self.current_ymin = 0.0
         self.current_ymax = 0.0
 
-    def return_output_line(self):
-        elapsed_time = (time.time() - self.start_time)
-
+    def return_output_line(self, elapsed_time):
         elapsed_hours = int(elapsed_time // 3600)
         elapsed_minutes = int((elapsed_time % 3600) // 60)
         elapsed_seconds = int(elapsed_time % 60)
@@ -77,7 +75,7 @@ class ClassLogs:
 
         return (f"{elapsed_hours:02d}h{elapsed_minutes:02d}m{elapsed_seconds:02d}s;"
                 f"{self.cnt_images}/{self.images_number};"
-                f"{(cnt_images * 100 / parameters.images_number):.2f}%;"
+                f"{(self.cnt_images * 100 / parameters.images_number):.2f}%;"
                 f"{remaining_hours:02d}h{remaining_minutes:02d}m;"
                 f"{current_video_minutes:02d}m{current_video_seconds:02d}s{current_video_milliseconds:02d}ms;"
                 f"center(x,y)=({self.current_center_x},{self.current_center_y});"
@@ -89,6 +87,51 @@ class ClassLogs:
         with open(self.logs_filename, "a") as file:
             file.write(new_line + "\n")
 
+class ClassResume:
+    resume_filename = "resume.xml"
+
+    def __init__(self):
+        self.cnt_images = 0
+        self.xmin = 0.0
+        self.xmax = 0.0
+        self.ymin = 0.0
+        self.ymax = 0.0
+        self.elapsed_time = 0.0
+
+    def resume_file_exist(self):
+        return os.path.exists(self.resume_filename)
+
+    def save_to_xml(self):
+        root = ET.Element("Resume")
+
+        ET.SubElement(root, "cnt_images").text = str(self.cnt_images)
+        ET.SubElement(root, "xmin").text = str(self.xmin)
+        ET.SubElement(root, "xmax").text = str(self.xmax)
+        ET.SubElement(root, "ymin").text = str(self.ymin)
+        ET.SubElement(root, "ymax").text = str(self.ymax)
+        ET.SubElement(root, "elapsed_time").text = str(self.elapsed_time)
+
+        tree = ET.ElementTree(root)
+
+        temp_filename = f"{self.resume_filename}.tmp"
+        with open(temp_filename, "wb") as tempfile:
+            tree.write(tempfile)
+        os.replace(temp_filename, self.resume_filename)     # atomic replacement to avoid file corruption
+
+    def load_from_xml(self):
+        tree = ET.parse(self.resume_filename)
+        root = tree.getroot()
+
+        self.cnt_images = int(root.find("cnt_images").text)
+        self.xmin = float(root.find("xmin").text)
+        self.xmax = float(root.find("xmax").text)
+        self.ymin = float(root.find("ymin").text)
+        self.ymax = float(root.find("ymax").text)
+        self.elapsed_time = float(root.find("elapsed_time").text)
+
+
+
+
 
 
 
@@ -99,6 +142,7 @@ debug = ClassDebug.WRITE_LOGS
 
 parameters = ClassParameters()
 logs = ClassLogs()
+resume = ClassResume()
 
 
 
@@ -176,29 +220,53 @@ if __name__ == '__main__':
 
     logs.images_number = parameters.images_number
 
+    # ask for resume if needed
+    use_resume = 0
+    if resume.resume_file_exist():
+        response_resume = ""
+        while (response_resume != "N") and (response_resume != "R"):
+            response_resume = input("Enter R to resume, otherwise enter N : ").upper()
+        if response_resume == "R":
+            use_resume = 1
+
     # Prepare output folder
     if command != ClassCommand.MAKE_VIDEO:
-        if os.path.exists(parameters.output_folder_pathname):
-            shutil.rmtree(parameters.output_folder_pathname)
-        os.makedirs(parameters.output_folder_pathname)
+        if use_resume == 0:
+            if os.path.exists(parameters.output_folder_pathname):
+                shutil.rmtree(parameters.output_folder_pathname)
+            os.makedirs(parameters.output_folder_pathname)
 
     # Loop for images generation
     if (command == ClassCommand.MAKE_IMAGES) or (command == ClassCommand.MAKE_ALL):
 
-        cnt_images = 0
+        # calcul start time
+        start_time = time.time()
 
-        xmin = parameters.start_xmin
-        xmax = parameters.start_xmax
-        ymin = parameters.start_ymin
-        ymax = parameters.start_ymax
+        # manage resume feature if needed, otherwise initialize variables with parameter
+        if use_resume == 1:
+            resume.load_from_xml()
+
+            start_frame = resume.cnt_images
+            xmin = resume.xmin
+            xmax = resume.xmax
+            ymin = resume.ymin
+            ymax = resume.ymax
+            resume_time = resume.elapsed_time
+        else:
+            start_frame = 0
+            xmin = parameters.start_xmin
+            xmax = parameters.start_xmax
+            ymin = parameters.start_ymin
+            ymax = parameters.start_ymax
+            resume_time = 0
 
         center_x, center_y = parameters.size_x // 2, parameters.size_y // 2
+
+        # start fill in logs
         logs.current_center_x = center_x
         logs.current_center_y = center_y
 
-        logs.start_time = time.time()
-
-        for frame in range(parameters.images_number):
+        for frame in range(start_frame, parameters.images_number):
 
             # Initialize image
             im = Image.new("RGB", (parameters.size_x, parameters.size_y), (255, 255, 255))
@@ -285,15 +353,24 @@ if __name__ == '__main__':
             im.save(f"{parameters.output_folder_pathname}/julia_zoom_{(frame+1):05d}.png")
             #im.show()
 
-            # Increment image counter
-            cnt_images += 1
-            logs.cnt_images = cnt_images
+            # Get elapsed time for logs and resume
+            elapsed_time = (time.time() - start_time)
 
             # Print and write logs
-            log_line = logs.return_output_line()
+            logs.cnt_images = (frame + 1)
+            log_line = logs.return_output_line(elapsed_time + resume_time)
             print(log_line)
             if (debug == ClassDebug.ALL) or (debug == ClassDebug.WRITE_LOGS):
                 logs.write_logs(log_line)
+
+            # Write resume file
+            resume.cnt_images = (frame + 1)
+            resume.xmin = xmin
+            resume.xmax = xmax
+            resume.ymin = ymin
+            resume.ymax = ymax
+            resume.elapsed_time = (elapsed_time + resume_time)
+            resume.save_to_xml()
 
     # Make video
     if (command == ClassCommand.MAKE_VIDEO) or (command == ClassCommand.MAKE_ALL):
