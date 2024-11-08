@@ -51,25 +51,36 @@ class ClassLogs:
         self.cnt_images = 0
         self.current_center_x = 0
         self.current_center_y = 0
-        self.nearest_bright_x = 0
-        self.nearest_bright_y = 0
+        self.nearest_interesting_x = 0
+        self.nearest_interesting_y = 0
         self.current_xmin = 0.0
         self.current_xmax = 0.0
         self.current_ymin = 0.0
         self.current_ymax = 0.0
 
     def return_output_line(self):
-        elapsed_time = time.time() - self.start_time
+        elapsed_time = (time.time() - self.start_time)
 
-        hours = int(elapsed_time // 3600)
-        minutes = int((elapsed_time % 3600) // 60)
-        seconds = int(elapsed_time % 60)
+        elapsed_hours = int(elapsed_time // 3600)
+        elapsed_minutes = int((elapsed_time % 3600) // 60)
+        elapsed_seconds = int(elapsed_time % 60)
 
-        return (f"{hours:02d}h{minutes:02d}m{seconds:02d}s;"
+        remaining_time = ((elapsed_time * (parameters.images_number - logs.cnt_images)) / logs.cnt_images)
+        remaining_hours = int(remaining_time // 3600)
+        remaining_minutes = int((remaining_time % 3600) // 60)
+
+        current_video_duration = (self.cnt_images / parameters.fps)
+        current_video_minutes = int((current_video_duration % 3600) // 60)
+        current_video_seconds = int(current_video_duration % 60)
+        current_video_milliseconds = int((current_video_duration - int(current_video_duration)) * 1000)
+
+        return (f"{elapsed_hours:02d}h{elapsed_minutes:02d}m{elapsed_seconds:02d}s;"
                 f"{self.cnt_images}/{self.images_number};"
                 f"{(cnt_images * 100 / parameters.images_number):.2f}%;"
+                f"{remaining_hours:02d}h{remaining_minutes:02d}m;"
+                f"{current_video_minutes:02d}m{current_video_seconds:02d}s{current_video_milliseconds:02d}ms;"
                 f"center(x,y)=({self.current_center_x},{self.current_center_y});"
-                f"nearest_bright(x,y)=({self.nearest_bright_x},{self.nearest_bright_y});"
+                f"nearest_interesting(x,y)=({self.nearest_interesting_x},{self.nearest_interesting_y});"
                 f"x(min,max)=({self.current_xmin},{self.current_xmax});"
                 f"y(min,max)=({self.current_ymin},{self.current_ymax})")
 
@@ -93,36 +104,30 @@ logs = ClassLogs()
 
 
 # Functions
-def luminosity(r, g, b):
-    return 0.2126 * r + 0.7152 * g + 0.0722 * b
-
-def check_density(image, threshold):
-    pixels_from_images = image.load()
+def check_density(grid, width, height, threshold):
 
     density_map = None
     if (debug == ClassDebug.IMAGES_DENSITY) or (debug == ClassDebug.ALL):
-        density_map = Image.new("RGB", image.size, (255, 255, 255))
+        density_map = Image.new("RGB", (width, height), (255, 255, 255))
         density_pixels = density_map.load()
 
-    brightness_flags = [[0] * image.height for _ in range(image.width)]
+    interesting_pixels = [[0] * height for _ in range(width)]
 
-    for cnt_width in range(image.width):
-        for cnt_height in range(image.height):
-            value_r, value_g, value_b = pixels_from_images[cnt_width, cnt_height]
+    for cnt_width in range(width):
+        for cnt_height in range(height):
+            pixel_interest = grid[cnt_width][cnt_height]
 
-            pixel_luminosity = luminosity(value_r, value_g, value_b)
-
-            if pixel_luminosity < threshold:
+            if pixel_interest < threshold:
                 if (debug == ClassDebug.IMAGES_DENSITY) or (debug == ClassDebug.ALL):
                     density_pixels[cnt_width, cnt_height] = (255, 255, 255)
             else:
                 if (debug == ClassDebug.IMAGES_DENSITY) or (debug == ClassDebug.ALL):
                     density_pixels[cnt_width, cnt_height] = (255, 0, 0)
-                brightness_flags[cnt_width][cnt_height] = 1
+                interesting_pixels[cnt_width][cnt_height] = 1
 
-    return density_map, brightness_flags
+    return density_map, interesting_pixels
 
-def find_nearest_bright_point(brightness_flags_array, width_array, height_array, center_x, center_y):
+def find_most_interesting_point(interesting_grid, width_grid, height_grid, center_x, center_y):
 
     queue = deque([(center_x, center_y)])
     visited = set()
@@ -131,12 +136,12 @@ def find_nearest_bright_point(brightness_flags_array, width_array, height_array,
     while queue:
         x, y = queue.popleft()
 
-        if brightness_flags_array[x][y] == 1:
+        if interesting_grid[x][y] == 1:
             return x, y
 
         for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
             nx, ny = x + dx, y + dy
-            if 0 <= nx < width_array and 0 <= ny < height_array and (nx, ny) not in visited:
+            if 0 <= nx < width_grid and 0 <= ny < height_grid and (nx, ny) not in visited:
                 visited.add((nx, ny))
                 queue.append((nx, ny))
 
@@ -197,14 +202,14 @@ if __name__ == '__main__':
             im = Image.new("RGB", (parameters.size_x, parameters.size_y), (255, 255, 255))
             pixels = im.load()
 
-            # Fill logs class if needed
-            logs.cnt_images = (cnt_images + 1)
+            # Fill logs class
             logs.current_xmin = xmin
             logs.current_xmax = xmax
             logs.current_ymin = ymin
             logs.current_ymax = ymax
 
             # Make image
+            iterations_grid = [[0] * parameters.size_y for _ in range(parameters.size_x)]
             for line in range(parameters.size_y):
                 for col in range(parameters.size_x):
 
@@ -218,6 +223,8 @@ if __name__ == '__main__':
                         y = 2 * stock * y + parameters.b
                         i += 1
 
+                    iterations_grid[col][line] = i
+
                     if i > parameters.max_iteration and (x ** 2 + y ** 2) <= 4:
                         pixels[col, line] = (0, 0, 0)
                     else:
@@ -225,46 +232,40 @@ if __name__ == '__main__':
 
             # Calculate brightness average
             nb_pixels = (parameters.size_y * parameters.size_x)
-            sum_brightness = 0
+            sum_iterations = 0
             for line in range(parameters.size_y):
                 for col in range(parameters.size_x):
-                    sum_brightness += luminosity(pixels[col, line][0], pixels[col, line][1], pixels[col, line][2])
-            brightness_average = sum_brightness / nb_pixels
+                    sum_iterations += iterations_grid[col][line]
+            iterations_average = sum_iterations / nb_pixels
 
             # Calculate variance
             sum_deviation_squared = 0
             for line in range(parameters.size_y):
                 for col in range(parameters.size_x):
-                    sum_deviation_squared += (luminosity(pixels[col, line][0], pixels[col, line][1], pixels[col, line][2]) - brightness_average) ** 2
+                    sum_deviation_squared += (iterations_grid[col][line] - iterations_average) ** 2
             variance = sum_deviation_squared / nb_pixels
 
             # Calculate standard deviation
             standard_deviation = math.sqrt(variance)
-            threshold_standard_deviation = (brightness_average + (2 * standard_deviation))
+            threshold_standard_deviation = (iterations_average + (2 * standard_deviation))
 
-            # Calculate brightness map, generate density image for debug
-            density_map, flags_density = check_density(im, threshold_standard_deviation)
+            # Calculate interesting map, generate density image for debug
+            density_map, flags_density = check_density(iterations_grid, parameters.size_x, parameters.size_y, threshold_standard_deviation)
             if (debug == ClassDebug.IMAGES_DENSITY) or (debug == ClassDebug.ALL):
-                density_map.save(f"{parameters.output_folder_pathname}/julia_density_{frame:05d}.png")
+                density_map.save(f"{parameters.output_folder_pathname}/julia_density_{(frame+1):05d}.png")
 
             # Calculate the new center
-            bright_point = find_nearest_bright_point(flags_density, parameters.size_x, parameters.size_y, center_x, center_y)
-            if bright_point == None:
+            most_interesting_point = find_most_interesting_point(flags_density, parameters.size_x, parameters.size_y, center_x, center_y)
+            if most_interesting_point == None:
                 print("Terminated prematurely (nothing left to display)")
                 sys.exit(1)
 
-            logs.nearest_bright_x, logs.nearest_bright_y = bright_point
-
-            # Print and write logs
-            log_line = logs.return_output_line()
-            print(log_line)
-            if (debug == ClassDebug.ALL) or (debug == ClassDebug.WRITE_LOGS):
-                logs.write_logs(log_line)
+            logs.nearest_interesting_x, logs.nearest_interesting_y = most_interesting_point
 
             # Calculate center
-            bright_x, bright_y = bright_point
-            fractal_x = (xmin + (bright_x * ((xmax - xmin) / parameters.size_x)))
-            fractal_y = (ymax - (bright_y * ((ymax - ymin) / parameters.size_y)))
+            interesting_x, interesting_y = most_interesting_point
+            fractal_x = (xmin + (interesting_x * ((xmax - xmin) / parameters.size_x)))
+            fractal_y = (ymax - (interesting_y * ((ymax - ymin) / parameters.size_y)))
             width = xmax - xmin
             height = ymax - ymin
             xmin, xmax = (fractal_x - (width / 2)), (fractal_x + (width / 2))
@@ -279,11 +280,18 @@ if __name__ == '__main__':
             ymax -= ((height * (1.0 - parameters.zoom_amount)) / 2)
 
             # Save image with numbering
-            im.save(f"{parameters.output_folder_pathname}/julia_zoom_{frame:05d}.png")
+            im.save(f"{parameters.output_folder_pathname}/julia_zoom_{(frame+1):05d}.png")
             #im.show()
 
             # Increment image counter
             cnt_images += 1
+            logs.cnt_images = cnt_images
+
+            # Print and write logs
+            log_line = logs.return_output_line()
+            print(log_line)
+            if (debug == ClassDebug.ALL) or (debug == ClassDebug.WRITE_LOGS):
+                logs.write_logs(log_line)
 
     # Make video
     if (command == ClassCommand.MAKE_VIDEO) or (command == ClassCommand.MAKE_ALL):
@@ -300,3 +308,4 @@ if __name__ == '__main__':
 
     # End
     sys.exit(0)
+
