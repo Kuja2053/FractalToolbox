@@ -41,7 +41,7 @@ class ClassParameters:
         self.R = 0
         self.G = 0
         self.B = 0
-        self.decimal_precision = 0
+        self.adaptive_decimal_precision = 0
         self.output_folder_pathname = ""
         self.images_number = 0
         self.fps = 0
@@ -57,6 +57,7 @@ class ClassLogs:
         self.current_center_y = 0
         self.nearest_interesting_x = 0
         self.nearest_interesting_y = 0
+        self.current_precision = 0
         self.current_xmin = 0.0
         self.current_xmax = 0.0
         self.current_ymin = 0.0
@@ -83,6 +84,7 @@ class ClassLogs:
                 f"{current_video_minutes:02d}m{current_video_seconds:02d}s{current_video_milliseconds:03d}ms;"
                 f"center(x,y)=({self.current_center_x},{self.current_center_y});"
                 f"nearest_interesting(x,y)=({self.nearest_interesting_x},{self.nearest_interesting_y});"
+                f"precision={self.current_precision};"
                 f"x(min,max)=({self.current_xmin},{self.current_xmax});"
                 f"y(min,max)=({self.current_ymin},{self.current_ymax})")
 
@@ -196,6 +198,20 @@ def find_most_interesting_point(interesting_grid, width_grid, height_grid, cente
     return None
 
 
+def adjust_precision(xmin, xmax, significant_digits):
+
+    difference = abs(Decimal(xmax) - Decimal(xmin))     # difference with current precision
+
+    magnitude = difference.log10().to_integral_value()
+    precision = significant_digits - int(magnitude)
+    getcontext().prec = precision
+
+    return precision
+
+
+
+
+
 
 
 
@@ -216,7 +232,7 @@ if __name__ == '__main__':
     parameters.R = 15
     parameters.G = 25
     parameters.B = 18
-    parameters.decimal_precision = 25
+    parameters.adaptive_decimal_precision = 6
     parameters.output_folder_pathname = "output"
     parameters.images_number = 1440
     parameters.fps = 24
@@ -245,7 +261,7 @@ if __name__ == '__main__':
     if (command == ClassCommand.MAKE_IMAGES) or (command == ClassCommand.MAKE_ALL):
 
         # Fix precision
-        getcontext().prec = parameters.decimal_precision
+        getcontext().prec = 50      # set a high value to start
 
         # calcul start time
         start_time = time.time()
@@ -275,6 +291,9 @@ if __name__ == '__main__':
         logs.current_center_y = center_y
 
         for frame in range(start_frame, parameters.images_number):
+
+            # Adapt decimal precision
+            logs.current_precision = adjust_precision(xmin, xmax, parameters.adaptive_decimal_precision)
 
             # Initialize image
             im = Image.new("RGB", (parameters.size_x, parameters.size_y), (255, 255, 255))
