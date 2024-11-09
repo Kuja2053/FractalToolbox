@@ -3,12 +3,14 @@ import shutil
 import math
 import sys
 import time
+from decimal import Decimal, getcontext
 import xml.etree.ElementTree as ET
 from collections import deque
 import imageio.v2
 from enum import Enum
 from PIL import Image
 Image.MAX_IMAGE_PIXELS = None
+
 
 
 
@@ -26,8 +28,8 @@ class ClassDebug(Enum):
 
 class ClassParameters:
     def __init__(self):
-        self.a = 0
-        self.b = 0
+        self.a = Decimal(0)
+        self.b = Decimal(0)
         self.size_x = 0
         self.size_y = 0
         self.start_xmin = 0
@@ -39,6 +41,7 @@ class ClassParameters:
         self.R = 0
         self.G = 0
         self.B = 0
+        self.decimal_precision = 0
         self.output_folder_pathname = ""
         self.images_number = 0
         self.fps = 0
@@ -77,7 +80,7 @@ class ClassLogs:
                 f"{self.cnt_images}/{self.images_number};"
                 f"{(self.cnt_images * 100 / parameters.images_number):.2f}%;"
                 f"{remaining_hours:02d}h{remaining_minutes:02d}m;"
-                f"{current_video_minutes:02d}m{current_video_seconds:02d}s{current_video_milliseconds:02d}ms;"
+                f"{current_video_minutes:02d}m{current_video_seconds:02d}s{current_video_milliseconds:03d}ms;"
                 f"center(x,y)=({self.current_center_x},{self.current_center_y});"
                 f"nearest_interesting(x,y)=({self.nearest_interesting_x},{self.nearest_interesting_y});"
                 f"x(min,max)=({self.current_xmin},{self.current_xmax});"
@@ -92,10 +95,10 @@ class ClassResume:
 
     def __init__(self):
         self.cnt_images = 0
-        self.xmin = 0.0
-        self.xmax = 0.0
-        self.ymin = 0.0
-        self.ymax = 0.0
+        self.xmin = Decimal(0.0)
+        self.xmax = Decimal(0.0)
+        self.ymin = Decimal(0.0)
+        self.ymax = Decimal(0.0)
         self.elapsed_time = 0.0
 
     def resume_file_exist(self):
@@ -123,10 +126,10 @@ class ClassResume:
         root = tree.getroot()
 
         self.cnt_images = int(root.find("cnt_images").text)
-        self.xmin = float(root.find("xmin").text)
-        self.xmax = float(root.find("xmax").text)
-        self.ymin = float(root.find("ymin").text)
-        self.ymax = float(root.find("ymax").text)
+        self.xmin = Decimal(float(root.find("xmin").text))
+        self.xmax = Decimal(float(root.find("xmax").text))
+        self.ymin = Decimal(float(root.find("ymin").text))
+        self.ymax = Decimal(float(root.find("ymax").text))
         self.elapsed_time = float(root.find("elapsed_time").text)
 
 
@@ -200,8 +203,8 @@ def find_most_interesting_point(interesting_grid, width_grid, height_grid, cente
 if __name__ == '__main__':
 
     # Configuration
-    parameters.a = 0.39
-    parameters.b = 0.6
+    parameters.a = Decimal(0.39)
+    parameters.b = Decimal(0.6)
     parameters.size_x = 1920
     parameters.size_y = 1088
     parameters.start_xmin = -1.25
@@ -213,21 +216,23 @@ if __name__ == '__main__':
     parameters.R = 15
     parameters.G = 25
     parameters.B = 18
+    parameters.decimal_precision = 25
     parameters.output_folder_pathname = "output"
-    parameters.images_number = 4320
+    parameters.images_number = 1440
     parameters.fps = 24
-    parameters.reverse_video = 0
+    parameters.reverse_video = 1
 
     logs.images_number = parameters.images_number
 
     # ask for resume if needed
-    use_resume = 0
-    if resume.resume_file_exist():
-        response_resume = ""
-        while (response_resume != "N") and (response_resume != "R"):
-            response_resume = input("Enter R to resume, otherwise enter N : ").upper()
-        if response_resume == "R":
-            use_resume = 1
+    if command != ClassCommand.MAKE_VIDEO:
+        use_resume = 0
+        if resume.resume_file_exist():
+            response_resume = ""
+            while (response_resume != "N") and (response_resume != "R"):
+                response_resume = input("Enter R to resume, otherwise enter N : ").upper()
+            if response_resume == "R":
+                use_resume = 1
 
     # Prepare output folder
     if command != ClassCommand.MAKE_VIDEO:
@@ -239,6 +244,9 @@ if __name__ == '__main__':
     # Loop for images generation
     if (command == ClassCommand.MAKE_IMAGES) or (command == ClassCommand.MAKE_ALL):
 
+        # Fix precision
+        getcontext().prec = parameters.decimal_precision
+
         # calcul start time
         start_time = time.time()
 
@@ -247,17 +255,17 @@ if __name__ == '__main__':
             resume.load_from_xml()
 
             start_frame = resume.cnt_images
-            xmin = resume.xmin
-            xmax = resume.xmax
-            ymin = resume.ymin
-            ymax = resume.ymax
+            xmin = Decimal(resume.xmin)
+            xmax = Decimal(resume.xmax)
+            ymin = Decimal(resume.ymin)
+            ymax = Decimal(resume.ymax)
             resume_time = resume.elapsed_time
         else:
             start_frame = 0
-            xmin = parameters.start_xmin
-            xmax = parameters.start_xmax
-            ymin = parameters.start_ymin
-            ymax = parameters.start_ymax
+            xmin = Decimal(parameters.start_xmin)
+            xmax = Decimal(parameters.start_xmax)
+            ymin = Decimal(parameters.start_ymin)
+            ymax = Decimal(parameters.start_ymax)
             resume_time = 0
 
         center_x, center_y = parameters.size_x // 2, parameters.size_y // 2
@@ -344,10 +352,11 @@ if __name__ == '__main__':
             # Calculate next zoom
             width = xmax - xmin
             height = ymax - ymin
-            xmin += ((width * (1.0 - parameters.zoom_amount)) / 2)
-            xmax -= ((width * (1.0 - parameters.zoom_amount)) / 2)
-            ymin += ((height * (1.0 - parameters.zoom_amount)) / 2)
-            ymax -= ((height * (1.0 - parameters.zoom_amount)) / 2)
+            inverse_zoom = Decimal(1.0 - parameters.zoom_amount)
+            xmin += ((width * inverse_zoom) / 2)
+            xmax -= ((width * inverse_zoom) / 2)
+            ymin += ((height * inverse_zoom) / 2)
+            ymax -= ((height * inverse_zoom) / 2)
 
             # Save image with numbering
             im.save(f"{parameters.output_folder_pathname}/julia_zoom_{(frame+1):05d}.png")
