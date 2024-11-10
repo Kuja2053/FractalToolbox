@@ -63,12 +63,11 @@ class ClassLogs:
         self.current_ymin = 0.0
         self.current_ymax = 0.0
 
-    def return_output_line(self, elapsed_time):
+    def return_output_line(self, elapsed_time, remaining_time):
         elapsed_hours = int(elapsed_time // 3600)
         elapsed_minutes = int((elapsed_time % 3600) // 60)
         elapsed_seconds = int(elapsed_time % 60)
 
-        remaining_time = ((elapsed_time * (parameters.images_number - logs.cnt_images)) / logs.cnt_images)
         remaining_hours = int(remaining_time // 3600)
         remaining_minutes = int((remaining_time % 3600) // 60)
 
@@ -134,6 +133,17 @@ class ClassResume:
         self.ymax = Decimal(float(root.find("ymax").text))
         self.elapsed_time = float(root.find("elapsed_time").text)
 
+class ClassEMA:
+    def __init__(self, smoothing_factor):
+        self.smoothing_factor = smoothing_factor
+        self.ema_value = None
+
+    def add_value(self, value):
+        if self.ema_value is None:
+            self.ema_value = value
+        else:
+            self.ema_value = (((1 - self.smoothing_factor) * value) + (self.smoothing_factor * self.ema_value))
+        return self.ema_value
 
 
 
@@ -290,7 +300,13 @@ if __name__ == '__main__':
         logs.current_center_x = center_x
         logs.current_center_y = center_y
 
+        # Initialize EMA
+        EMA_duration_per_image = ClassEMA(0.80)
+
         for frame in range(start_frame, parameters.images_number):
+
+            # Calcul start image for this frame
+            start_time_frame = time.time()
 
             # Adapt decimal precision
             logs.current_precision = adjust_precision(xmin, xmax, parameters.adaptive_decimal_precision)
@@ -383,10 +399,12 @@ if __name__ == '__main__':
 
             # Get elapsed time for logs and resume
             elapsed_time = (time.time() - start_time)
+            duration_per_frame = EMA_duration_per_image.add_value(time.time() - start_time_frame)
+            remaining_time = (duration_per_frame * (parameters.images_number - (frame + 1)))
 
             # Print and write logs
             logs.cnt_images = (frame + 1)
-            log_line = logs.return_output_line(elapsed_time + resume_time)
+            log_line = logs.return_output_line(elapsed_time + resume_time, remaining_time)
             print(log_line)
             if (debug == ClassDebug.ALL) or (debug == ClassDebug.WRITE_LOGS):
                 logs.write_logs(log_line)
