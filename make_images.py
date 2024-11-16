@@ -3,6 +3,7 @@ import shutil
 import math
 import sys
 import time
+import csv
 from decimal import Decimal, getcontext
 import xml.etree.ElementTree as ET
 from collections import deque
@@ -22,29 +23,34 @@ class ClassDebug(Enum):
 
 class ClassParameters:
     def __init__(self):
-        self.a = Decimal(0)
-        self.b = Decimal(0)
+        self.inputs_filename = ""
         self.size_x = 0
         self.size_y = 0
-        self.start_xmin = 0
-        self.start_xmax = 0
-        self.start_ymin = 0
-        self.start_ymax = 0
-        self.zoom_amount = 0
         self.max_iteration = 0
-        self.R = 0
-        self.G = 0
-        self.B = 0
         self.adaptive_decimal_precision = 0
         self.output_folder_pathname = ""
         self.output_images_prefix = ""
         self.density_images_prefix = ""
-        self.images_number = 0
+        self.logs_filename = ""
         self.fps = 0
 
-class ClassLogs:
-    logs_filename = "logs.txt"
+class ClassInput():
+    def __init__(self):
+        self.a = Decimal(0)
+        self.b = Decimal(0)
+        self.xmin = 0
+        self.xmax = 0
+        self.ymin = 0
+        self.ymax = 0
+        self.R = 0
+        self.G = 0
+        self.B = 0
+        self.opt_zoom = False
+        self.opt_centering = False
+        self.zoom_amount = 0.0
+        self.centering_sigma = 0.0
 
+class ClassLogs:
     def __init__(self):
         self.images_number = 0
         self.cnt_images = 0
@@ -73,7 +79,7 @@ class ClassLogs:
 
         return (f"{elapsed_hours:02d}h{elapsed_minutes:02d}m{elapsed_seconds:02d}s;"
                 f"{self.cnt_images}/{self.images_number};"
-                f"{(self.cnt_images * 100 / parameters.images_number):.2f}%;"
+                f"{(self.cnt_images * 100 / self.images_number):.2f}%;"
                 f"{remaining_hours:02d}h{remaining_minutes:02d}m;"
                 f"{current_video_minutes:02d}m{current_video_seconds:02d}s{current_video_milliseconds:03d}ms;"
                 f"center(x,y)=({self.current_center_x},{self.current_center_y});"
@@ -82,14 +88,15 @@ class ClassLogs:
                 f"x(min,max)=({self.current_xmin},{self.current_xmax});"
                 f"y(min,max)=({self.current_ymin},{self.current_ymax})")
 
-    def write_logs(self, new_line):
-        with open(self.logs_filename, "a") as file:
+    def write_logs(self, new_line, filename):
+        with open(filename, "a") as file:
             file.write(new_line + "\n")
 
 class ClassResume:
     resume_filename = "resume.xml"
 
     def __init__(self):
+        self.inputs_filename = ""
         self.cnt_images = 0
         self.xmin = Decimal(0.0)
         self.xmax = Decimal(0.0)
@@ -103,6 +110,7 @@ class ClassResume:
     def save_to_xml(self):
         root = ET.Element("Resume")
 
+        ET.SubElement(root, "inputs_filename").text = str(self.inputs_filename)
         ET.SubElement(root, "cnt_images").text = str(self.cnt_images)
         ET.SubElement(root, "xmin").text = str(self.xmin)
         ET.SubElement(root, "xmax").text = str(self.xmax)
@@ -121,6 +129,7 @@ class ClassResume:
         tree = ET.parse(self.resume_filename)
         root = tree.getroot()
 
+        self.inputs_filename = root.find("inputs_filename").text
         self.cnt_images = int(root.find("cnt_images").text)
         self.xmin = Decimal(float(root.find("xmin").text))
         self.xmax = Decimal(float(root.find("xmax").text))
@@ -201,7 +210,6 @@ def find_most_interesting_point(interesting_grid, width_grid, height_grid, cente
 
     return None
 
-
 def adjust_precision(xmin, xmax, significant_digits):
 
     difference = abs(Decimal(xmax) - Decimal(xmin))     # difference with current precision
@@ -212,7 +220,59 @@ def adjust_precision(xmin, xmax, significant_digits):
 
     return precision
 
+def ReadInputsFile(inputs_filepath):
+    try:
+        with open(inputs_filepath, mode="r", newline="", encoding="utf-8") as file:
+            reader = csv.reader(file, delimiter=";")
+            count = 0
+            data = []
+            for row in reader:
+                if count == 0:
+                    count += 1
+                    continue
+                local_inputs = ClassInput()
 
+                local_inputs.a = Decimal(row[0])
+                local_inputs.b = Decimal(row[1])
+
+                if row[2] != "":
+                    local_inputs.xmin = float(row[2])
+
+                if row[3] != "":
+                    local_inputs.xmax = float(row[3])
+
+                if row[4] != "":
+                    local_inputs.ymin = float(row[4])
+
+                if row[5] != "":
+                    local_inputs.ymax = float(row[5])
+
+                local_inputs.R = int(row[6])
+                local_inputs.G = int(row[7])
+                local_inputs.B = int(row[8])
+
+                if "zoom" in row[9].lower():
+                    local_inputs.opt_zoom = True
+
+                if "centering" in row[9].lower():
+                    local_inputs.opt_centering = True
+
+                if local_inputs.opt_zoom:
+                    local_inputs.zoom_amount = float(row[10])
+
+                if local_inputs.opt_centering:
+                    local_inputs.centering_sigma = float(row[11])
+
+                data.append(local_inputs)
+
+                count += 1
+
+            if len(data) < 1:
+                return []
+
+            return data
+    except:
+        return []
 
 
 
@@ -223,27 +283,16 @@ def adjust_precision(xmin, xmax, significant_digits):
 if __name__ == '__main__':
 
     # Configuration
-    parameters.a = Decimal(0.39)
-    parameters.b = Decimal(0.6)
+    parameters.inputs_filename = "Inputs/output/random_v0.csv"
     parameters.size_x = 1920
     parameters.size_y = 1088
-    parameters.start_xmin = -1.25
-    parameters.start_xmax = 1.25
-    parameters.start_ymin = -1.25
-    parameters.start_ymax = 1.25
-    parameters.zoom_amount = 0.975
-    parameters.max_iteration = 256
-    parameters.R = 15
-    parameters.G = 25
-    parameters.B = 18
+    parameters.max_iteration = 100 #256
     parameters.adaptive_decimal_precision = 6
     parameters.output_folder_pathname = "output"
-    parameters.output_images_prefix = "julia_zoom_"
+    parameters.output_images_prefix = "julia_random_"
     parameters.density_images_prefix = "julia_density_"
-    parameters.images_number = 1248
+    parameters.logs_filename = "logs.txt"
     parameters.fps = 24
-
-    logs.images_number = parameters.images_number
 
     # ask for resume if needed
     use_resume = 0
@@ -270,6 +319,12 @@ if __name__ == '__main__':
     if use_resume == 1:
         resume.load_from_xml()
 
+        inputs = ReadInputsFile(resume.inputs_filename)
+        if len(inputs) == 0:
+            print("Error with Inputs file")
+            sys.exit(1)
+
+        inputs_filename = resume.inputs_filename
         start_frame = resume.cnt_images
         xmin = Decimal(resume.xmin)
         xmax = Decimal(resume.xmax)
@@ -277,12 +332,20 @@ if __name__ == '__main__':
         ymax = Decimal(resume.ymax)
         resume_time = resume.elapsed_time
     else:
+        inputs = ReadInputsFile(parameters.inputs_filename)
+        if len(inputs) == 0:
+            print("Error with Inputs file")
+            sys.exit(1)
+
+        inputs_filename = parameters.inputs_filename
         start_frame = 0
-        xmin = Decimal(parameters.start_xmin)
-        xmax = Decimal(parameters.start_xmax)
-        ymin = Decimal(parameters.start_ymin)
-        ymax = Decimal(parameters.start_ymax)
+        xmin = Decimal(inputs[0].xmin)
+        xmax = Decimal(inputs[0].xmax)
+        ymin = Decimal(inputs[0].ymin)
+        ymax = Decimal(inputs[0].ymax)
         resume_time = 0
+
+    logs.images_number = len(inputs)
 
     center_x, center_y = parameters.size_x // 2, parameters.size_y // 2
 
@@ -293,7 +356,7 @@ if __name__ == '__main__':
     # Initialize EMA
     EMA_duration_per_image = ClassEMA(0.80)
 
-    for frame in range(start_frame, parameters.images_number):
+    for frame in range(start_frame, len(inputs)):
 
         # Calcul start image for this frame
         start_time_frame = time.time()
@@ -322,8 +385,8 @@ if __name__ == '__main__':
 
                 while i <= parameters.max_iteration and (x ** 2 + y ** 2) <= 4:
                     stock = x
-                    x = x ** 2 - y ** 2 + parameters.a
-                    y = 2 * stock * y + parameters.b
+                    x = x ** 2 - y ** 2 + inputs[frame].a
+                    y = 2 * stock * y + inputs[frame].b
                     i += 1
 
                 iterations_grid[col][line] = i
@@ -331,57 +394,76 @@ if __name__ == '__main__':
                 if i > parameters.max_iteration and (x ** 2 + y ** 2) <= 4:
                     pixels[col, line] = (0, 0, 0)
                 else:
-                    pixels[col, line] = ((parameters.R * i) % 256, (parameters.G * i) % 256, (parameters.B * i) % 256)
+                    pixels[col, line] = ((inputs[frame].R * i) % 256, (inputs[frame].G * i) % 256, (inputs[frame].B * i) % 256)
 
-        # Calculate brightness average
-        nb_pixels = (parameters.size_y * parameters.size_x)
-        sum_iterations = 0
-        for line in range(parameters.size_y):
-            for col in range(parameters.size_x):
-                sum_iterations += iterations_grid[col][line]
-        iterations_average = sum_iterations / nb_pixels
+        # Manage centering option
+        if inputs[frame].opt_centering:
 
-        # Calculate variance
-        sum_deviation_squared = 0
-        for line in range(parameters.size_y):
-            for col in range(parameters.size_x):
-                sum_deviation_squared += (iterations_grid[col][line] - iterations_average) ** 2
-        variance = sum_deviation_squared / nb_pixels
+            # Calculate iterations average
+            nb_pixels = (parameters.size_y * parameters.size_x)
+            sum_iterations = 0
+            for line in range(parameters.size_y):
+                for col in range(parameters.size_x):
+                    sum_iterations += iterations_grid[col][line]
+            iterations_average = sum_iterations / nb_pixels
 
-        # Calculate standard deviation
-        standard_deviation = math.sqrt(variance)
-        threshold_standard_deviation = (iterations_average + (2 * standard_deviation))
+            # Calculate variance
+            sum_deviation_squared = 0
+            for line in range(parameters.size_y):
+                for col in range(parameters.size_x):
+                    sum_deviation_squared += (iterations_grid[col][line] - iterations_average) ** 2
+            variance = sum_deviation_squared / nb_pixels
 
-        # Calculate interesting map, generate density image for debug
-        density_map, flags_density = check_density(iterations_grid, parameters.size_x, parameters.size_y, threshold_standard_deviation)
-        if (debug == ClassDebug.IMAGES_DENSITY) or (debug == ClassDebug.ALL):
-            density_map.save(f"{parameters.output_folder_pathname}/{parameters.density_images_prefix}{(frame+1):05d}.png")
+            # Calculate standard deviation
+            standard_deviation = math.sqrt(variance)
+            threshold_standard_deviation = (iterations_average + (inputs[frame].centering_sigma * standard_deviation))
 
-        # Calculate the new center
-        most_interesting_point = find_most_interesting_point(flags_density, parameters.size_x, parameters.size_y, center_x, center_y)
-        if most_interesting_point == None:
-            print("Terminated prematurely (nothing left to display)")
-            sys.exit(1)
+            # Calculate interesting map, generate density image for debug
+            density_map, flags_density = check_density(iterations_grid, parameters.size_x, parameters.size_y, threshold_standard_deviation)
+            if (debug == ClassDebug.IMAGES_DENSITY) or (debug == ClassDebug.ALL):
+                density_map.save(f"{parameters.output_folder_pathname}/{parameters.density_images_prefix}{(frame+1):05d}.png")
 
-        logs.nearest_interesting_x, logs.nearest_interesting_y = most_interesting_point
+            # Calculate the new center
+            most_interesting_point = find_most_interesting_point(flags_density, parameters.size_x, parameters.size_y, center_x, center_y)
+            if most_interesting_point == None:
+                print("Terminated prematurely (nothing left to display)")
+                sys.exit(1)
 
-        # Calculate center
-        interesting_x, interesting_y = most_interesting_point
-        fractal_x = (xmin + (interesting_x * ((xmax - xmin) / parameters.size_x)))
-        fractal_y = (ymax - (interesting_y * ((ymax - ymin) / parameters.size_y)))
-        width = xmax - xmin
-        height = ymax - ymin
-        xmin, xmax = (fractal_x - (width / 2)), (fractal_x + (width / 2))
-        ymin, ymax = (fractal_y - (height / 2)), (fractal_y + (height / 2))
+            # Calculate center
+            interesting_x, interesting_y = most_interesting_point
+            fractal_x = (xmin + (interesting_x * ((xmax - xmin) / parameters.size_x)))
+            fractal_y = (ymax - (interesting_y * ((ymax - ymin) / parameters.size_y)))
+            width = xmax - xmin
+            height = ymax - ymin
+            xmin, xmax = (fractal_x - (width / 2)), (fractal_x + (width / 2))
+            ymin, ymax = (fractal_y - (height / 2)), (fractal_y + (height / 2))
 
-        # Calculate next zoom
-        width = xmax - xmin
-        height = ymax - ymin
-        inverse_zoom = Decimal(1.0 - parameters.zoom_amount)
-        xmin += ((width * inverse_zoom) / 2)
-        xmax -= ((width * inverse_zoom) / 2)
-        ymin += ((height * inverse_zoom) / 2)
-        ymax -= ((height * inverse_zoom) / 2)
+            logs.nearest_interesting_x, logs.nearest_interesting_y = most_interesting_point
+
+        # Treat case without centering
+        if not inputs[frame].opt_centering:
+            logs.nearest_interesting_x = center_x
+            logs.nearest_interesting_y = center_y
+
+        # Manage zoom option
+        if inputs[frame].opt_zoom:
+
+            # Calculate next zoom
+            width = xmax - xmin
+            height = ymax - ymin
+            inverse_zoom = Decimal(1.0 - inputs[frame].zoom_amount)
+            xmin += ((width * inverse_zoom) / 2)
+            xmax -= ((width * inverse_zoom) / 2)
+            ymin += ((height * inverse_zoom) / 2)
+            ymax -= ((height * inverse_zoom) / 2)
+
+        # Manage case without zoom
+        if not inputs[frame].opt_zoom:
+            if frame < (len(inputs) - 1):
+                xmin = Decimal(inputs[frame + 1].xmin)
+                xmax = Decimal(inputs[frame + 1].xmax)
+                ymin = Decimal(inputs[frame + 1].ymin)
+                ymax = Decimal(inputs[frame + 1].ymax)
 
         # Save image with numbering
         im.save(f"{parameters.output_folder_pathname}/{parameters.output_images_prefix}{(frame+1):05d}.png")
@@ -390,16 +472,17 @@ if __name__ == '__main__':
         # Get elapsed time for logs and resume
         elapsed_time = (time.time() - start_time)
         duration_per_frame = EMA_duration_per_image.add_value(time.time() - start_time_frame)
-        remaining_time = (duration_per_frame * (parameters.images_number - (frame + 1)))
+        remaining_time = (duration_per_frame * (len(inputs) - (frame + 1)))
 
         # Print and write logs
         logs.cnt_images = (frame + 1)
         log_line = logs.return_output_line(elapsed_time + resume_time, remaining_time)
         print(log_line)
         if (debug == ClassDebug.ALL) or (debug == ClassDebug.WRITE_LOGS):
-            logs.write_logs(log_line)
+            logs.write_logs(log_line, parameters.logs_filename)
 
         # Write resume file
+        resume.inputs_filename = inputs_filename
         resume.cnt_images = (frame + 1)
         resume.xmin = xmin
         resume.xmax = xmax
