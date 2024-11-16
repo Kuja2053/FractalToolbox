@@ -37,7 +37,10 @@ class ClassParameters:
         self.B = 0
         self.adaptive_decimal_precision = 0
         self.output_folder_pathname = ""
+        self.output_images_prefix = ""
+        self.density_images_prefix = ""
         self.images_number = 0
+        self.fps = 0
 
 class ClassLogs:
     logs_filename = "logs.txt"
@@ -235,9 +238,10 @@ if __name__ == '__main__':
     parameters.B = 18
     parameters.adaptive_decimal_precision = 6
     parameters.output_folder_pathname = "output"
+    parameters.output_images_prefix = "julia_zoom_"
+    parameters.density_images_prefix = "julia_density_"
     parameters.images_number = 1248
     parameters.fps = 24
-    parameters.reverse_video = 1
 
     logs.images_number = parameters.images_number
 
@@ -351,7 +355,7 @@ if __name__ == '__main__':
         # Calculate interesting map, generate density image for debug
         density_map, flags_density = check_density(iterations_grid, parameters.size_x, parameters.size_y, threshold_standard_deviation)
         if (debug == ClassDebug.IMAGES_DENSITY) or (debug == ClassDebug.ALL):
-            density_map.save(f"{parameters.output_folder_pathname}/julia_density_{(frame+1):05d}.png")
+            density_map.save(f"{parameters.output_folder_pathname}/{parameters.density_images_prefix}{(frame+1):05d}.png")
 
         # Calculate the new center
         most_interesting_point = find_most_interesting_point(flags_density, parameters.size_x, parameters.size_y, center_x, center_y)
@@ -380,7 +384,7 @@ if __name__ == '__main__':
         ymax -= ((height * inverse_zoom) / 2)
 
         # Save image with numbering
-        im.save(f"{parameters.output_folder_pathname}/julia_zoom_{(frame+1):05d}.png")
+        im.save(f"{parameters.output_folder_pathname}/{parameters.output_images_prefix}{(frame+1):05d}.png")
         #im.show()
 
         # Get elapsed time for logs and resume
