@@ -230,6 +230,10 @@ def ReadInputsFile(inputs_filepath):
                 if count == 0:
                     count += 1
                     continue
+
+                if len(row) == 0:
+                    continue
+
                 local_inputs = ClassInput()
 
                 local_inputs.a = Decimal(row[0])
@@ -283,12 +287,12 @@ def ReadInputsFile(inputs_filepath):
 if __name__ == '__main__':
 
     # Configuration
-    parameters.inputs_filename = "Inputs/output/random_v0.csv"
+    parameters.inputs_filename = "Inputs/Outputs/random_together_v0_v1.csv"
     parameters.size_x = 1920
     parameters.size_y = 1088
     parameters.max_iteration = 100 #256
     parameters.adaptive_decimal_precision = 6
-    parameters.output_folder_pathname = "output"
+    parameters.output_folder_pathname = "Outputs/random_together_v0_v1"
     parameters.output_images_prefix = "julia_random_"
     parameters.density_images_prefix = "julia_density_"
     parameters.logs_filename = "logs.txt"
@@ -305,9 +309,17 @@ if __name__ == '__main__':
 
     # Prepare output folder
     if use_resume == 0:
-        if os.path.exists(parameters.output_folder_pathname):
-            shutil.rmtree(parameters.output_folder_pathname)
-        os.makedirs(parameters.output_folder_pathname)
+        if os.path.exists(parameters.output_folder_pathname) and os.path.isdir(parameters.output_folder_pathname):
+            if len(os.listdir(parameters.output_folder_pathname)) != 0:
+                response_clean_outputs_folder = ""
+                while (response_clean_outputs_folder != "N") and (response_clean_outputs_folder != "C"):
+                    response_clean_outputs_folder = input("Selected outputs folder is not empty, Enter C to clean it, "
+                                                          "otherwise enter N : ").upper()
+                if response_clean_outputs_folder == "C":
+                    shutil.rmtree(parameters.output_folder_pathname)
+                    os.makedirs(parameters.output_folder_pathname)
+        else:
+            os.makedirs(parameters.output_folder_pathname)
 
     # Fix precision
     getcontext().prec = 50      # set a high value to start
@@ -376,6 +388,9 @@ if __name__ == '__main__':
 
         # Make image
         iterations_grid = [[0] * parameters.size_y for _ in range(parameters.size_x)]
+        nb_points = (parameters.size_y * parameters.size_x)
+        cnt_points = 0
+        string_percent_points = ""
         for line in range(parameters.size_y):
             for col in range(parameters.size_x):
 
@@ -395,6 +410,15 @@ if __name__ == '__main__':
                     pixels[col, line] = (0, 0, 0)
                 else:
                     pixels[col, line] = ((inputs[frame].R * i) % 256, (inputs[frame].G * i) % 256, (inputs[frame].B * i) % 256)
+
+                cnt_points += 1
+                current_percent_points = f"{int(cnt_points / nb_points * 100)}"
+                if current_percent_points != string_percent_points:
+                    print("", end="\r")
+                    print(f"{(frame + 1)}/{len(inputs)}, {current_percent_points}%", end="")
+                    string_percent_points = current_percent_points
+
+        print("", end="\r")
 
         # Manage centering option
         if inputs[frame].opt_centering:
