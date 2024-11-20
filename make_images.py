@@ -23,6 +23,10 @@ class ClassDebug(Enum):
     WRITE_LOGS = 2
     ALL = 3
 
+class ClassTypeFractal(Enum):
+    JULIA = 0
+    MANDELBROT = 1
+
 class ClassParameters:
     def __init__(self):
         self.inputs_pathfile = ""
@@ -93,8 +97,11 @@ class ClassParameters:
 
 class ClassInput():
     def __init__(self):
-        self.a = Decimal(0)
-        self.b = Decimal(0)
+        self.type_fractal = ClassTypeFractal.JULIA
+        self.julia_a = Decimal(0)
+        self.julia_b = Decimal(0)
+        self.mandelbrot_dynamic_offset_x = Decimal(0)
+        self.mandelbrot_dynamic_offset_y = Decimal(0)
         self.xmin = 0
         self.xmax = 0
         self.ymin = 0
@@ -299,36 +306,47 @@ def ReadInputsFile(inputs_filepath):
 
                 local_inputs = ClassInput()
 
-                local_inputs.a = Decimal(row[0])
-                local_inputs.b = Decimal(row[1])
+                if "julia" in row[0].lower():
+                    local_inputs.type_fractal = ClassTypeFractal.JULIA
+                elif "mandelbrot" in row[0].lower():
+                    local_inputs.type_fractal = ClassTypeFractal.MANDELBROT
+                else:
+                    continue
 
-                if row[2] != "":
-                    local_inputs.xmin = float(row[2])
-
-                if row[3] != "":
-                    local_inputs.xmax = float(row[3])
-
-                if row[4] != "":
-                    local_inputs.ymin = float(row[4])
+                if local_inputs.type_fractal == ClassTypeFractal.JULIA:
+                    local_inputs.julia_a = Decimal(row[1])
+                    local_inputs.julia_b = Decimal(row[2])
+                else:
+                    local_inputs.mandelbrot_dynamic_offset_x = Decimal(row[3])
+                    local_inputs.mandelbrot_dynamic_offset_y = Decimal(row[4])
 
                 if row[5] != "":
-                    local_inputs.ymax = float(row[5])
+                    local_inputs.xmin = float(row[5])
 
-                local_inputs.R = int(row[6])
-                local_inputs.G = int(row[7])
-                local_inputs.B = int(row[8])
+                if row[6] != "":
+                    local_inputs.xmax = float(row[6])
 
-                if "zoom" in row[9].lower():
+                if row[7] != "":
+                    local_inputs.ymin = float(row[7])
+
+                if row[8] != "":
+                    local_inputs.ymax = float(row[8])
+
+                local_inputs.R = int(row[9])
+                local_inputs.G = int(row[10])
+                local_inputs.B = int(row[11])
+
+                if "zoom" in row[12].lower():
                     local_inputs.opt_zoom = True
 
-                if "centering" in row[9].lower():
+                if "centering" in row[12].lower():
                     local_inputs.opt_centering = True
 
                 if local_inputs.opt_zoom:
-                    local_inputs.zoom_amount = float(row[10])
+                    local_inputs.zoom_amount = float(row[13])
 
                 if local_inputs.opt_centering:
-                    local_inputs.centering_sigma = float(row[11])
+                    local_inputs.centering_sigma = float(row[14])
 
                 data.append(local_inputs)
 
@@ -501,22 +519,47 @@ if __name__ == '__main__':
         for line in range(parameters.size_y):
             for col in range(parameters.size_x):
 
-                i = 1
-                x = xmin + col * (xmax - xmin) / parameters.size_x
-                y = ymax - line * (ymax - ymin) / parameters.size_y
+                if inputs[frame].type_fractal == ClassTypeFractal.JULIA:
 
-                while i <= parameters.max_iteration and (x ** 2 + y ** 2) <= 4:
-                    stock = x
-                    x = x ** 2 - y ** 2 + inputs[frame].a
-                    y = 2 * stock * y + inputs[frame].b
-                    i += 1
+                    i = 1
+                    x = xmin + col * (xmax - xmin) / parameters.size_x
+                    y = ymax - line * (ymax - ymin) / parameters.size_y
 
-                iterations_grid[col][line] = i
+                    while i <= parameters.max_iteration and (x ** 2 + y ** 2) <= 4:
+                        stock = x
+                        x = x ** 2 - y ** 2 + inputs[frame].julia_a
+                        y = 2 * stock * y + inputs[frame].julia_b
+                        i += 1
 
-                if i > parameters.max_iteration and (x ** 2 + y ** 2) <= 4:
-                    pixels[col, line] = (0, 0, 0)
+                    iterations_grid[col][line] = i
+
+                    if i > parameters.max_iteration and (x ** 2 + y ** 2) <= 4:
+                        pixels[col, line] = (0, 0, 0)
+                    else:
+                        pixels[col, line] = ((inputs[frame].R * i) % 256, (inputs[frame].G * i) % 256, (inputs[frame].B * i) % 256)
+
                 else:
-                    pixels[col, line] = ((inputs[frame].R * i) % 256, (inputs[frame].G * i) % 256, (inputs[frame].B * i) % 256)
+
+                    i = 1
+
+                    x0 = xmin + col * (xmax - xmin) / parameters.size_x + inputs[frame].mandelbrot_dynamic_offset_x
+                    y0 = ymax - line * (ymax - ymin) / parameters.size_y + inputs[frame].mandelbrot_dynamic_offset_y
+                    x = 0
+                    y = 0
+
+                    while i <= parameters.max_iteration and (x ** 2 + y ** 2) <= 4:
+                        stock = x
+                        x = x ** 2 - y ** 2 + x0
+                        y = 2 * stock * y + y0
+                        i += 1
+
+                    iterations_grid[col][line] = i
+
+                    if i > parameters.max_iteration and (x ** 2 + y ** 2) <= 4:
+                        pixels[col, line] = (0, 0, 0)
+                    else:
+                        pixels[col, line] = (
+                        (inputs[frame].R * i) % 256, (inputs[frame].G * i) % 256, (inputs[frame].B * i) % 256)
 
                 cnt_points += 1
                 current_percent_points = f"{int(cnt_points / nb_points * 100)}"
