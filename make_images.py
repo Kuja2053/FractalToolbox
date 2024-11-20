@@ -7,6 +7,7 @@ import csv
 from decimal import Decimal, getcontext
 import xml.etree.ElementTree as ET
 from bs4 import BeautifulSoup
+import argparse
 from collections import deque
 from enum import Enum
 from PIL import Image
@@ -68,23 +69,26 @@ class ClassParameters:
 
         os.replace(temp_filename, project_filepath)  # atomic replacement to avoid file corruption
 
-    def project_file_exist(project_filepath):
+    def project_file_exist(self, project_filepath):
         return os.path.exists(project_filepath)
 
     def load_from_xml(self, project_filepath):
         tree = ET.parse(project_filepath)
         root = tree.getroot()
 
-        self.inputs_pathfile = root.find("inputs_pathfile").text
+        def get_text_or_empty(element, default=""):
+            return element.text if element is not None and element.text is not None else default
+
+        self.inputs_pathfile = get_text_or_empty(root.find("inputs_pathfile"))
         self.size_x = int(root.find("size_x").text)
         self.size_y = int(root.find("size_y").text)
         self.max_iteration = int(root.find("max_iteration").text)
         self.adaptive_decimal_precision = int(root.find("adaptive_decimal_precision").text)
-        self.output_folder_path = root.find("output_folder_path").text
-        self.output_images_prefix = root.find("output_images_prefix").text
-        self.density_images_prefix = root.find("density_images_prefix").text
-        self.logs_pathfile = root.find("logs_pathfile").text
-        self.resume_pathfile = root.find("resume_pathfile").text
+        self.output_folder_path = get_text_or_empty(root.find("output_folder_path"))
+        self.output_images_prefix = get_text_or_empty(root.find("output_images_prefix"))
+        self.density_images_prefix = get_text_or_empty(root.find("density_images_prefix"))
+        self.logs_pathfile = get_text_or_empty(root.find("logs_pathfile"))
+        self.resume_pathfile = get_text_or_empty(root.find("resume_pathfile"))
         self.fps = int(root.find("fps").text)
 
 class ClassInput():
@@ -215,7 +219,7 @@ class ClassEMA:
 
 
 # Globales
-debug = ClassDebug.WRITE_LOGS
+debug = ClassDebug.NONE
 
 parameters = ClassParameters()
 logs = ClassLogs()
@@ -345,18 +349,67 @@ def ReadInputsFile(inputs_filepath):
 # Main
 if __name__ == '__main__':
 
-    # Configuration
-    parameters.inputs_pathfile = "Inputs/Outputs/random_interesting_v0_v1.csv"
-    parameters.size_x = 1920
-    parameters.size_y = 1088
-    parameters.max_iteration = 100 #256
-    parameters.adaptive_decimal_precision = 6
-    parameters.output_folder_path = "Outputs/random_interesting_v0_v1"
-    parameters.output_images_prefix = "julia_random_"
-    parameters.density_images_prefix = "julia_density_"
-    parameters.logs_pathfile = "logs.txt"
-    parameters.resume_pathfile = "resume.xml"
-    parameters.fps = 24
+    # Configure arguments detection
+    parser = argparse.ArgumentParser(description="Script used to generates fractals images.")
+
+    parser.add_argument(
+        "project_filepath",
+        nargs="?",
+        type=str,
+        help="Path to the existing or new project file (use -N or -n option for a new file).",
+    )
+
+    parser.add_argument(
+        "--logs",
+        action="store_true",
+        help="Activate the logs file",
+    )
+
+    parser.add_argument(
+        "--density",
+        action="store_true",
+        help="Activate generation of density images.",
+    )
+
+    # Parse arguments
+    args = parser.parse_args()
+
+    # Treat the arguments
+    if args.project_filepath == None:
+        project_pathfile = input("\nNo project pathfile provided.\n"
+                                 "--h or --help to get help.\n"
+                                 "Enter to exit.\n"
+                                 "Enter a pathfile to create a new project file.\n"
+                                 "Input: ")
+
+        if project_pathfile == "":
+            sys.exit(0)
+
+        print("")
+        if parameters.project_file_exist(project_pathfile):
+            overwrite_existing_project_file = ""
+            while (overwrite_existing_project_file != "n") and (overwrite_existing_project_file != "y"):
+                overwrite_existing_project_file = input("This file already exists.\n"
+                                                        "Enter Y or y to overwrite the file, "
+                                                        "otherwise enter N or n: ").lower()
+            if overwrite_existing_project_file == "n":
+                sys.exit(0)
+
+        parameters.CreateNewProjectFile(project_pathfile)
+        print("File created.")
+        sys.exit(0)
+
+    else:
+        parameters.load_from_xml(args.project_filepath)
+
+        if args.logs and args.density:
+            debug = ClassDebug.ALL
+        elif args.logs:
+            debug = ClassDebug.WRITE_LOGS
+        elif args.density:
+            debug = ClassDebug.IMAGES_DENSITY
+        else:
+            debug = ClassDebug.NONE
 
     # ask for resume if needed
     resume.resume_pathfile = parameters.resume_pathfile
