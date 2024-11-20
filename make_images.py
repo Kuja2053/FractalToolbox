@@ -553,13 +553,13 @@ if __name__ == '__main__':
                         y = 2 * stock * y + y0
                         i += 1
 
-                    iterations_grid[col][line] = i
-
                     if i > parameters.max_iteration and (x ** 2 + y ** 2) <= 4:
                         pixels[col, line] = (0, 0, 0)
+                        iterations_grid[col][line] = 0
                     else:
                         pixels[col, line] = (
                         (inputs[frame].R * i) % 256, (inputs[frame].G * i) % 256, (inputs[frame].B * i) % 256)
+                        iterations_grid[col][line] = i
 
                 cnt_points += 1
                 current_percent_points = f"{int(cnt_points / nb_points * 100)}"
