@@ -6,6 +6,7 @@ import time
 import csv
 from decimal import Decimal, getcontext
 import xml.etree.ElementTree as ET
+from bs4 import BeautifulSoup
 from collections import deque
 from enum import Enum
 from PIL import Image
@@ -34,6 +35,57 @@ class ClassParameters:
         self.logs_pathfile = ""
         self.resume_pathfile = ""
         self.fps = 0
+
+    def CreateNewProjectFile(self, project_filepath):
+        root = ET.Element("Project")
+
+        ET.SubElement(root, "inputs_pathfile").text = self.inputs_pathfile
+        ET.SubElement(root, "size_x").text = str(self.size_x)
+        ET.SubElement(root, "size_y").text = str(self.size_y)
+        ET.SubElement(root, "max_iteration").text = str(self.max_iteration)
+        ET.SubElement(root, "adaptive_decimal_precision").text = str(self.adaptive_decimal_precision)
+        ET.SubElement(root, "output_folder_path").text = self.output_folder_path
+        ET.SubElement(root, "output_images_prefix").text = self.output_images_prefix
+        ET.SubElement(root, "density_images_prefix").text = self.density_images_prefix
+        ET.SubElement(root, "logs_pathfile").text = self.logs_pathfile
+        ET.SubElement(root, "resume_pathfile").text = self.resume_pathfile
+        ET.SubElement(root, "fps").text = str(self.fps)
+
+        tree = ET.ElementTree(root)
+
+        temp_filename = f"{project_filepath}.tmp"
+        with open(temp_filename, "wb") as tempfile:
+            tree.write(tempfile)
+
+        with open(temp_filename, "r", encoding="utf-8") as file:
+            xml_content = file.read()
+
+        soup = BeautifulSoup(xml_content, "lxml-xml")
+        prettified_xml = soup.prettify()
+
+        with open(temp_filename, "w", encoding="utf-8") as file:
+            file.write(prettified_xml)
+
+        os.replace(temp_filename, project_filepath)  # atomic replacement to avoid file corruption
+
+    def project_file_exist(project_filepath):
+        return os.path.exists(project_filepath)
+
+    def load_from_xml(self, project_filepath):
+        tree = ET.parse(project_filepath)
+        root = tree.getroot()
+
+        self.inputs_pathfile = root.find("inputs_pathfile").text
+        self.size_x = int(root.find("size_x").text)
+        self.size_y = int(root.find("size_y").text)
+        self.max_iteration = int(root.find("max_iteration").text)
+        self.adaptive_decimal_precision = int(root.find("adaptive_decimal_precision").text)
+        self.output_folder_path = root.find("output_folder_path").text
+        self.output_images_prefix = root.find("output_images_prefix").text
+        self.density_images_prefix = root.find("density_images_prefix").text
+        self.logs_pathfile = root.find("logs_pathfile").text
+        self.resume_pathfile = root.find("resume_pathfile").text
+        self.fps = int(root.find("fps").text)
 
 class ClassInput():
     def __init__(self):
@@ -121,6 +173,16 @@ class ClassResume:
         temp_filename = f"{self.resume_pathfile}.tmp"
         with open(temp_filename, "wb") as tempfile:
             tree.write(tempfile)
+
+        with open(temp_filename, "r", encoding="utf-8") as file:
+            xml_content = file.read()
+
+        soup = BeautifulSoup(xml_content, "lxml-xml")
+        prettified_xml = soup.prettify()
+
+        with open(temp_filename, "w", encoding="utf-8") as file:
+            file.write(prettified_xml)
+
         os.replace(temp_filename, self.resume_pathfile)     # atomic replacement to avoid file corruption
 
     def load_from_xml(self):
