@@ -33,11 +33,11 @@ parameters = ClassParameters()
 if __name__ == '__main__':
 
     # Configuration
-    parameters.input_output_folder_pathname = "output"
-    parameters.input_output_images_prefix = "julia_cos_sin_"
+    parameters.input_output_folder_pathname = "Outputs/random_together_v0_v1"
+    parameters.input_output_images_prefix = "julia_random_"
     parameters.fps = 24
     parameters.reverse_video = 0
-    parameters.output_filename = "julia"
+    parameters.output_filename = "julia_random"
 
     # Sort images for output video
     if parameters.reverse_video == 0:

@@ -23,15 +23,16 @@ class ClassDebug(Enum):
 
 class ClassParameters:
     def __init__(self):
-        self.inputs_filename = ""
+        self.inputs_pathfile = ""
         self.size_x = 0
         self.size_y = 0
         self.max_iteration = 0
         self.adaptive_decimal_precision = 0
-        self.output_folder_pathname = ""
+        self.output_folder_path = ""
         self.output_images_prefix = ""
         self.density_images_prefix = ""
-        self.logs_filename = ""
+        self.logs_pathfile = ""
+        self.resume_pathfile = ""
         self.fps = 0
 
 class ClassInput():
@@ -77,11 +78,11 @@ class ClassLogs:
         current_video_seconds = int(current_video_duration % 60)
         current_video_milliseconds = int((current_video_duration - int(current_video_duration)) * 1000)
 
-        return (f"{elapsed_hours:02d}h{elapsed_minutes:02d}m{elapsed_seconds:02d}s;"
-                f"{self.cnt_images}/{self.images_number};"
+        return (f"{self.cnt_images}/{self.images_number};"
                 f"{(self.cnt_images * 100 / self.images_number):.2f}%;"
-                f"{remaining_hours:02d}h{remaining_minutes:02d}m;"
-                f"{current_video_minutes:02d}m{current_video_seconds:02d}s{current_video_milliseconds:03d}ms;"
+                f"E:{elapsed_hours:02d}h{elapsed_minutes:02d}m{elapsed_seconds:02d}s;"
+                f"R:{remaining_hours:02d}h{remaining_minutes:02d}m;"
+                f"V:{current_video_minutes:02d}m{current_video_seconds:02d}s{current_video_milliseconds:03d}ms;"
                 f"center(x,y)=({self.current_center_x},{self.current_center_y});"
                 f"nearest_interesting(x,y)=({self.nearest_interesting_x},{self.nearest_interesting_y});"
                 f"precision={self.current_precision};"
@@ -93,10 +94,8 @@ class ClassLogs:
             file.write(new_line + "\n")
 
 class ClassResume:
-    resume_filename = "resume.xml"
-
     def __init__(self):
-        self.inputs_filename = ""
+        self.resume_pathfile = ""
         self.cnt_images = 0
         self.xmin = Decimal(0.0)
         self.xmax = Decimal(0.0)
@@ -105,12 +104,11 @@ class ClassResume:
         self.elapsed_time = 0.0
 
     def resume_file_exist(self):
-        return os.path.exists(self.resume_filename)
+        return os.path.exists(self.resume_pathfile)
 
     def save_to_xml(self):
         root = ET.Element("Resume")
 
-        ET.SubElement(root, "inputs_filename").text = str(self.inputs_filename)
         ET.SubElement(root, "cnt_images").text = str(self.cnt_images)
         ET.SubElement(root, "xmin").text = str(self.xmin)
         ET.SubElement(root, "xmax").text = str(self.xmax)
@@ -120,16 +118,15 @@ class ClassResume:
 
         tree = ET.ElementTree(root)
 
-        temp_filename = f"{self.resume_filename}.tmp"
+        temp_filename = f"{self.resume_pathfile}.tmp"
         with open(temp_filename, "wb") as tempfile:
             tree.write(tempfile)
-        os.replace(temp_filename, self.resume_filename)     # atomic replacement to avoid file corruption
+        os.replace(temp_filename, self.resume_pathfile)     # atomic replacement to avoid file corruption
 
     def load_from_xml(self):
-        tree = ET.parse(self.resume_filename)
+        tree = ET.parse(self.resume_pathfile)
         root = tree.getroot()
 
-        self.inputs_filename = root.find("inputs_filename").text
         self.cnt_images = int(root.find("cnt_images").text)
         self.xmin = Decimal(float(root.find("xmin").text))
         self.xmax = Decimal(float(root.find("xmax").text))
@@ -287,18 +284,20 @@ def ReadInputsFile(inputs_filepath):
 if __name__ == '__main__':
 
     # Configuration
-    parameters.inputs_filename = "Inputs/Outputs/random_together_v0_v1.csv"
+    parameters.inputs_pathfile = "Inputs/Outputs/random_interesting_v0_v1.csv"
     parameters.size_x = 1920
     parameters.size_y = 1088
     parameters.max_iteration = 100 #256
     parameters.adaptive_decimal_precision = 6
-    parameters.output_folder_pathname = "Outputs/random_together_v0_v1"
+    parameters.output_folder_path = "Outputs/random_interesting_v0_v1"
     parameters.output_images_prefix = "julia_random_"
     parameters.density_images_prefix = "julia_density_"
-    parameters.logs_filename = "logs.txt"
+    parameters.logs_pathfile = "logs.txt"
+    parameters.resume_pathfile = "resume.xml"
     parameters.fps = 24
 
     # ask for resume if needed
+    resume.resume_pathfile = parameters.resume_pathfile
     use_resume = 0
     if resume.resume_file_exist():
         response_resume = ""
@@ -309,17 +308,17 @@ if __name__ == '__main__':
 
     # Prepare output folder
     if use_resume == 0:
-        if os.path.exists(parameters.output_folder_pathname) and os.path.isdir(parameters.output_folder_pathname):
-            if len(os.listdir(parameters.output_folder_pathname)) != 0:
+        if os.path.exists(parameters.output_folder_path) and os.path.isdir(parameters.output_folder_path):
+            if len(os.listdir(parameters.output_folder_path)) != 0:
                 response_clean_outputs_folder = ""
                 while (response_clean_outputs_folder != "N") and (response_clean_outputs_folder != "C"):
                     response_clean_outputs_folder = input("Selected outputs folder is not empty, Enter C to clean it, "
                                                           "otherwise enter N : ").upper()
                 if response_clean_outputs_folder == "C":
-                    shutil.rmtree(parameters.output_folder_pathname)
-                    os.makedirs(parameters.output_folder_pathname)
+                    shutil.rmtree(parameters.output_folder_path)
+                    os.makedirs(parameters.output_folder_path)
         else:
-            os.makedirs(parameters.output_folder_pathname)
+            os.makedirs(parameters.output_folder_path)
 
     # Fix precision
     getcontext().prec = 50      # set a high value to start
@@ -328,15 +327,14 @@ if __name__ == '__main__':
     start_time = time.time()
 
     # manage resume feature if needed, otherwise initialize variables with parameter
+    inputs = ReadInputsFile(parameters.inputs_pathfile)
+    if len(inputs) == 0:
+        print("Error with Inputs file")
+        sys.exit(1)
+
     if use_resume == 1:
         resume.load_from_xml()
 
-        inputs = ReadInputsFile(resume.inputs_filename)
-        if len(inputs) == 0:
-            print("Error with Inputs file")
-            sys.exit(1)
-
-        inputs_filename = resume.inputs_filename
         start_frame = resume.cnt_images
         xmin = Decimal(resume.xmin)
         xmax = Decimal(resume.xmax)
@@ -344,12 +342,6 @@ if __name__ == '__main__':
         ymax = Decimal(resume.ymax)
         resume_time = resume.elapsed_time
     else:
-        inputs = ReadInputsFile(parameters.inputs_filename)
-        if len(inputs) == 0:
-            print("Error with Inputs file")
-            sys.exit(1)
-
-        inputs_filename = parameters.inputs_filename
         start_frame = 0
         xmin = Decimal(inputs[0].xmin)
         xmax = Decimal(inputs[0].xmax)
@@ -445,7 +437,7 @@ if __name__ == '__main__':
             # Calculate interesting map, generate density image for debug
             density_map, flags_density = check_density(iterations_grid, parameters.size_x, parameters.size_y, threshold_standard_deviation)
             if (debug == ClassDebug.IMAGES_DENSITY) or (debug == ClassDebug.ALL):
-                density_map.save(f"{parameters.output_folder_pathname}/{parameters.density_images_prefix}{(frame+1):05d}.png")
+                density_map.save(f"{parameters.output_folder_path}/{parameters.density_images_prefix}{(frame+1):05d}.png")
 
             # Calculate the new center
             most_interesting_point = find_most_interesting_point(flags_density, parameters.size_x, parameters.size_y, center_x, center_y)
@@ -490,7 +482,7 @@ if __name__ == '__main__':
                 ymax = Decimal(inputs[frame + 1].ymax)
 
         # Save image with numbering
-        im.save(f"{parameters.output_folder_pathname}/{parameters.output_images_prefix}{(frame+1):05d}.png")
+        im.save(f"{parameters.output_folder_path}/{parameters.output_images_prefix}{(frame+1):05d}.png")
         #im.show()
 
         # Get elapsed time for logs and resume
@@ -503,10 +495,9 @@ if __name__ == '__main__':
         log_line = logs.return_output_line(elapsed_time + resume_time, remaining_time)
         print(log_line)
         if (debug == ClassDebug.ALL) or (debug == ClassDebug.WRITE_LOGS):
-            logs.write_logs(log_line, parameters.logs_filename)
+            logs.write_logs(log_line, parameters.logs_pathfile)
 
         # Write resume file
-        resume.inputs_filename = inputs_filename
         resume.cnt_images = (frame + 1)
         resume.xmin = xmin
         resume.xmax = xmax
