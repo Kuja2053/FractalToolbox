@@ -7,6 +7,9 @@ import csv
 from decimal import Decimal, getcontext
 import xml.etree.ElementTree as ET
 from bs4 import BeautifulSoup
+import concurrent.futures
+from functools import partial
+from threading import Lock
 import argparse
 from collections import deque
 from enum import Enum
@@ -219,6 +222,20 @@ class ClassEMA:
             self.ema_value = (((1 - self.smoothing_factor) * value) + (self.smoothing_factor * self.ema_value))
         return self.ema_value
 
+class ClassThreadPercent:
+    def __init__(self):
+        self.lock = Lock()
+        self.cnt_points = 0
+        self.nb_points = 0
+        self.nb_points_per_update = 0
+        self.string_percent_points = ""
+        self.nb_images = 0
+        self.cnt_images = 0
+
+
+
+
+
 
 
 
@@ -231,6 +248,7 @@ debug = ClassDebug.NONE
 parameters = ClassParameters()
 logs = ClassLogs()
 resume = ClassResume()
+thread_percent = ClassThreadPercent()
 
 
 
@@ -359,6 +377,87 @@ def ReadInputsFile(inputs_filepath):
     except:
         return []
 
+def process_line(line, parameters, inputs, frame, xmin, xmax, ymin, ymax):
+    global thread_percent
+
+    line_pixels = []
+    line_iterations = []
+
+    for col in range(parameters.size_x):
+
+        if inputs[frame].type_fractal == ClassTypeFractal.JULIA:
+
+            i = 1
+            x = xmin + col * (xmax - xmin) / parameters.size_x
+            y = ymax - line * (ymax - ymin) / parameters.size_y
+
+            while i <= parameters.max_iteration and (x ** 2 + y ** 2) <= 4:
+                stock = x
+                x = x ** 2 - y ** 2 + inputs[frame].julia_a
+                y = 2 * stock * y + inputs[frame].julia_b
+                i += 1
+
+            if i > parameters.max_iteration and (x ** 2 + y ** 2) <= 4:
+                line_pixels.append((0, 0, 0))
+                line_iterations.append(0)
+            else:
+                line_pixels.append(((inputs[frame].R * i) % 256, (inputs[frame].G * i) % 256, (inputs[frame].B * i) % 256))
+                line_iterations.append(i)
+
+        else:
+
+            i = 1
+
+            x0 = xmin + col * (xmax - xmin) / parameters.size_x + inputs[frame].mandelbrot_dynamic_offset_x
+            y0 = ymax - line * (ymax - ymin) / parameters.size_y + inputs[frame].mandelbrot_dynamic_offset_y
+            x = 0
+            y = 0
+
+            while i <= parameters.max_iteration and (x ** 2 + y ** 2) <= 4:
+                stock = x
+                x = x ** 2 - y ** 2 + x0
+                y = 2 * stock * y + y0
+                i += 1
+
+            if i > parameters.max_iteration and (x ** 2 + y ** 2) <= 4:
+                line_pixels.append((0, 0, 0))
+                line_iterations.append(0)
+            else:
+                line_pixels.append(((inputs[frame].R * i) % 256, (inputs[frame].G * i) % 256, (inputs[frame].B * i) % 256))
+                line_iterations.append(i)
+
+    with thread_percent.lock:
+        thread_percent.cnt_points += thread_percent.nb_points_per_update
+        current_percent_points = f"{int(thread_percent.cnt_points / thread_percent.nb_points * 100)}"
+        if current_percent_points != thread_percent.string_percent_points:
+            print("", end="\r")
+            print(f"{(thread_percent.cnt_images + 1)}/{thread_percent.nb_images}, {current_percent_points}%", end="")
+            thread_percent.string_percent_points = current_percent_points
+
+    return line_pixels, line_iterations
+
+def process_block(min_line, max_line, parameters, inputs, frame, xmin, xmax, ymin, ymax):
+    block_pixels = []
+    block_iterations = []
+
+    for line in range(min_line, max_line):
+        line_pixels, line_iterations = process_line(line, parameters=parameters, inputs=inputs, frame=frame,
+                                                    xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax)
+        block_pixels.append(line_pixels)
+        block_iterations.append(line_iterations)
+
+    return block_pixels, block_iterations
+
+def validate_nb_threads_arg(value):
+    try:
+        thread_value = int(value)
+        if thread_value <= 0:
+            raise argparse.ArgumentTypeError("Number of threads must be equal to 1 or up.")
+        return thread_value
+    except ValueError:
+        raise argparse.ArgumentTypeError("Number of threads must be equal to 1 or up.")
+
+
 
 
 
@@ -387,6 +486,13 @@ if __name__ == '__main__':
         "--density",
         action="store_true",
         help="Activate generation of density images.",
+    )
+
+    parser.add_argument(
+        "--threads",
+        type=validate_nb_threads_arg,
+        default=1,
+        help="Number of threads (1 or up)."
     )
 
     # Parse arguments
@@ -493,6 +599,11 @@ if __name__ == '__main__':
     # Initialize EMA
     EMA_duration_per_image = ClassEMA(0.80)
 
+    # Initialize thread percent values
+    thread_percent.nb_points = (parameters.size_x * parameters.size_y)
+    thread_percent.nb_points_per_update = parameters.size_x
+    thread_percent.nb_images = len(inputs)
+
     for frame in range(start_frame, len(inputs)):
 
         # Calcul start image for this frame
@@ -516,57 +627,29 @@ if __name__ == '__main__':
         nb_points = (parameters.size_y * parameters.size_x)
         cnt_points = 0
         string_percent_points = ""
-        for line in range(parameters.size_y):
-            for col in range(parameters.size_x):
 
-                if inputs[frame].type_fractal == ClassTypeFractal.JULIA:
+        lines_per_thread = math.ceil(parameters.size_y / args.threads)
+        thread_percent.cnt_points = 0
+        thread_percent.string_percent_points = ""
+        thread_percent.cnt_images = frame
 
-                    i = 1
-                    x = xmin + col * (xmax - xmin) / parameters.size_x
-                    y = ymax - line * (ymax - ymin) / parameters.size_y
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            func = partial(process_block, parameters=parameters, inputs=inputs, frame=frame,
+                           xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax)
 
-                    while i <= parameters.max_iteration and (x ** 2 + y ** 2) <= 4:
-                        stock = x
-                        x = x ** 2 - y ** 2 + inputs[frame].julia_a
-                        y = 2 * stock * y + inputs[frame].julia_b
-                        i += 1
+            blocks = [ (i * lines_per_thread, min((i + 1) * lines_per_thread, parameters.size_y))
+                       for i in range(args.threads) ]
 
-                    iterations_grid[col][line] = i
+            results = list(executor.map(lambda args_line: func(*args_line), blocks))
 
-                    if i > parameters.max_iteration and (x ** 2 + y ** 2) <= 4:
-                        pixels[col, line] = (0, 0, 0)
-                    else:
-                        pixels[col, line] = ((inputs[frame].R * i) % 256, (inputs[frame].G * i) % 256, (inputs[frame].B * i) % 256)
-
-                else:
-
-                    i = 1
-
-                    x0 = xmin + col * (xmax - xmin) / parameters.size_x + inputs[frame].mandelbrot_dynamic_offset_x
-                    y0 = ymax - line * (ymax - ymin) / parameters.size_y + inputs[frame].mandelbrot_dynamic_offset_y
-                    x = 0
-                    y = 0
-
-                    while i <= parameters.max_iteration and (x ** 2 + y ** 2) <= 4:
-                        stock = x
-                        x = x ** 2 - y ** 2 + x0
-                        y = 2 * stock * y + y0
-                        i += 1
-
-                    if i > parameters.max_iteration and (x ** 2 + y ** 2) <= 4:
-                        pixels[col, line] = (0, 0, 0)
-                        iterations_grid[col][line] = 0
-                    else:
-                        pixels[col, line] = (
-                        (inputs[frame].R * i) % 256, (inputs[frame].G * i) % 256, (inputs[frame].B * i) % 256)
-                        iterations_grid[col][line] = i
-
-                cnt_points += 1
-                current_percent_points = f"{int(cnt_points / nb_points * 100)}"
-                if current_percent_points != string_percent_points:
-                    print("", end="\r")
-                    print(f"{(frame + 1)}/{len(inputs)}, {current_percent_points}%", end="")
-                    string_percent_points = current_percent_points
+        for block_index, (block_pixels, block_iterations) in enumerate(results):
+            min_line = block_index * lines_per_thread
+            for line_offset, (line_pixels, line_iterations) in enumerate(zip(block_pixels, block_iterations)):
+                actual_line = min_line + line_offset
+                for col, color in enumerate(line_pixels):
+                    pixels[col, actual_line] = color
+                for col, iteration in enumerate(line_iterations):
+                    iterations_grid[col][actual_line] = iteration
 
         print("", end="\r")
 
