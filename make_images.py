@@ -7,9 +7,9 @@ import csv
 from decimal import Decimal, getcontext
 import xml.etree.ElementTree as ET
 from bs4 import BeautifulSoup
-import concurrent.futures
 from functools import partial
 from threading import Lock
+from multiprocessing import Pool, Manager
 import argparse
 from collections import deque
 from enum import Enum
@@ -222,15 +222,7 @@ class ClassEMA:
             self.ema_value = (((1 - self.smoothing_factor) * value) + (self.smoothing_factor * self.ema_value))
         return self.ema_value
 
-class ClassThreadPercent:
-    def __init__(self):
-        self.lock = Lock()
-        self.cnt_points = 0
-        self.nb_points = 0
-        self.nb_points_per_update = 0
-        self.string_percent_points = ""
-        self.nb_images = 0
-        self.cnt_images = 0
+
 
 
 
@@ -244,11 +236,10 @@ class ClassThreadPercent:
 
 # Globales
 debug = ClassDebug.NONE
-
+lock = Lock()
 parameters = ClassParameters()
 logs = ClassLogs()
 resume = ClassResume()
-thread_percent = ClassThreadPercent()
 
 
 
@@ -377,9 +368,7 @@ def ReadInputsFile(inputs_filepath):
     except:
         return []
 
-def process_line(line, parameters, inputs, frame, xmin, xmax, ymin, ymax):
-    global thread_percent
-
+def process_line(line, parameters, inputs, frame, xmin, xmax, ymin, ymax, cores_percent):
     line_pixels = []
     line_iterations = []
 
@@ -426,36 +415,38 @@ def process_line(line, parameters, inputs, frame, xmin, xmax, ymin, ymax):
                 line_pixels.append(((inputs[frame].R * i) % 256, (inputs[frame].G * i) % 256, (inputs[frame].B * i) % 256))
                 line_iterations.append(i)
 
-    with thread_percent.lock:
-        thread_percent.cnt_points += thread_percent.nb_points_per_update
-        current_percent_points = f"{int(thread_percent.cnt_points / thread_percent.nb_points * 100)}"
-        if current_percent_points != thread_percent.string_percent_points:
+    with lock:
+        cores_percent['cnt_points'] += cores_percent['nb_points_per_update']
+        current_percent_points = f"{int(cores_percent['cnt_points'] / cores_percent['nb_points'] * 100)}"
+        if current_percent_points != cores_percent['string_percent_points']:
             print("", end="\r")
-            print(f"{(thread_percent.cnt_images + 1)}/{thread_percent.nb_images}, {current_percent_points}%", end="")
-            thread_percent.string_percent_points = current_percent_points
+            print(f"{(cores_percent['cnt_images'] + 1)}/{cores_percent['nb_images']},"
+                  f"{current_percent_points}%", end="")
+            cores_percent['string_percent_points'] = current_percent_points
 
     return line_pixels, line_iterations
 
-def process_block(min_line, max_line, parameters, inputs, frame, xmin, xmax, ymin, ymax):
+def process_block(block_range, parameters, inputs, frame, xmin, xmax, ymin, ymax, cores_percent):
+    min_line, max_line = block_range
     block_pixels = []
     block_iterations = []
 
     for line in range(min_line, max_line):
         line_pixels, line_iterations = process_line(line, parameters=parameters, inputs=inputs, frame=frame,
-                                                    xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax)
+                                                    xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax, cores_percent=cores_percent)
         block_pixels.append(line_pixels)
         block_iterations.append(line_iterations)
 
     return block_pixels, block_iterations
 
-def validate_nb_threads_arg(value):
+def validate_nb_cores_arg(value):
     try:
-        thread_value = int(value)
-        if thread_value <= 0:
-            raise argparse.ArgumentTypeError("Number of threads must be equal to 1 or up.")
-        return thread_value
+        cores_value = int(value)
+        if cores_value <= 0:
+            raise argparse.ArgumentTypeError("Number of cores must be equal to 1 or up.")
+        return cores_value
     except ValueError:
-        raise argparse.ArgumentTypeError("Number of threads must be equal to 1 or up.")
+        raise argparse.ArgumentTypeError("Number of cores must be equal to 1 or up.")
 
 
 
@@ -489,10 +480,10 @@ if __name__ == '__main__':
     )
 
     parser.add_argument(
-        "--threads",
-        type=validate_nb_threads_arg,
+        "--cores",
+        type=validate_nb_cores_arg,
         default=1,
-        help="Number of threads (1 or up)."
+        help="Number of cores (1 or up)."
     )
 
     # Parse arguments
@@ -599,11 +590,6 @@ if __name__ == '__main__':
     # Initialize EMA
     EMA_duration_per_image = ClassEMA(0.80)
 
-    # Initialize thread percent values
-    thread_percent.nb_points = (parameters.size_x * parameters.size_y)
-    thread_percent.nb_points_per_update = parameters.size_x
-    thread_percent.nb_images = len(inputs)
-
     for frame in range(start_frame, len(inputs)):
 
         # Calcul start image for this frame
@@ -628,22 +614,29 @@ if __name__ == '__main__':
         cnt_points = 0
         string_percent_points = ""
 
-        lines_per_thread = math.ceil(parameters.size_y / args.threads)
-        thread_percent.cnt_points = 0
-        thread_percent.string_percent_points = ""
-        thread_percent.cnt_images = frame
+        lines_per_core = math.ceil(parameters.size_y / args.cores)
 
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            func = partial(process_block, parameters=parameters, inputs=inputs, frame=frame,
-                           xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax)
+        manager = Manager()
+        cores_percent = manager.dict({
+            "cnt_points": 0,
+            "nb_points": (parameters.size_x * parameters.size_y),
+            "nb_points_per_update": parameters.size_x,
+            "string_percent_points": "",
+            "cnt_images": frame,
+            "nb_images": len(inputs),
+        })
 
-            blocks = [ (i * lines_per_thread, min((i + 1) * lines_per_thread, parameters.size_y))
-                       for i in range(args.threads) ]
+        func = partial(process_block, parameters=parameters, inputs=inputs, frame=frame,
+                       xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax, cores_percent=cores_percent)
 
-            results = list(executor.map(lambda args_line: func(*args_line), blocks))
+        blocks = [(i * lines_per_core, min((i + 1) * lines_per_core, parameters.size_y))
+                  for i in range(args.cores)]
+
+        with Pool(processes=args.cores) as pool:
+            results = pool.map(func, blocks)
 
         for block_index, (block_pixels, block_iterations) in enumerate(results):
-            min_line = block_index * lines_per_thread
+            min_line = block_index * lines_per_core
             for line_offset, (line_pixels, line_iterations) in enumerate(zip(block_pixels, block_iterations)):
                 actual_line = min_line + line_offset
                 for col, color in enumerate(line_pixels):
