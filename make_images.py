@@ -23,8 +23,6 @@ Image.MAX_IMAGE_PIXELS = None
 class ClassDebug(Enum):
     NONE = 0
     IMAGES_DENSITY = 1
-    WRITE_LOGS = 2
-    ALL = 3
 
 class ClassTypeFractal(Enum):
     JULIA = 0
@@ -249,7 +247,7 @@ resume = ClassResume()
 def check_density(grid, width, height, threshold):
 
     density_map = None
-    if (debug == ClassDebug.IMAGES_DENSITY) or (debug == ClassDebug.ALL):
+    if debug == ClassDebug.IMAGES_DENSITY:
         density_map = Image.new("RGB", (width, height), (255, 255, 255))
         density_pixels = density_map.load()
 
@@ -260,10 +258,10 @@ def check_density(grid, width, height, threshold):
             pixel_interest = grid[cnt_width][cnt_height]
 
             if pixel_interest < threshold:
-                if (debug == ClassDebug.IMAGES_DENSITY) or (debug == ClassDebug.ALL):
+                if debug == ClassDebug.IMAGES_DENSITY:
                     density_pixels[cnt_width, cnt_height] = (255, 255, 255)
             else:
-                if (debug == ClassDebug.IMAGES_DENSITY) or (debug == ClassDebug.ALL):
+                if debug == ClassDebug.IMAGES_DENSITY:
                     density_pixels[cnt_width, cnt_height] = (255, 0, 0)
                 interesting_pixels[cnt_width][cnt_height] = 1
 
@@ -420,7 +418,7 @@ def process_line(line, parameters, inputs, frame, xmin, xmax, ymin, ymax, cores_
         current_percent_points = f"{int(cores_percent['cnt_points'] / cores_percent['nb_points'] * 100)}"
         if current_percent_points != cores_percent['string_percent_points']:
             print("", end="\r")
-            print(f"{(cores_percent['cnt_images'] + 1)}/{cores_percent['nb_images']},"
+            print(f"{(cores_percent['cnt_images'] + 1)}/{cores_percent['nb_images']}, "
                   f"{current_percent_points}%", end="")
             cores_percent['string_percent_points'] = current_percent_points
 
@@ -468,12 +466,6 @@ if __name__ == '__main__':
     )
 
     parser.add_argument(
-        "--logs",
-        action="store_true",
-        help="Activate the logs file",
-    )
-
-    parser.add_argument(
         "--density",
         action="store_true",
         help="Activate generation of density images.",
@@ -517,11 +509,7 @@ if __name__ == '__main__':
     else:
         parameters.load_from_xml(args.project_filepath)
 
-        if args.logs and args.density:
-            debug = ClassDebug.ALL
-        elif args.logs:
-            debug = ClassDebug.WRITE_LOGS
-        elif args.density:
+        if args.density:
             debug = ClassDebug.IMAGES_DENSITY
         else:
             debug = ClassDebug.NONE
@@ -670,7 +658,7 @@ if __name__ == '__main__':
 
             # Calculate interesting map, generate density image for debug
             density_map, flags_density = check_density(iterations_grid, parameters.size_x, parameters.size_y, threshold_standard_deviation)
-            if (debug == ClassDebug.IMAGES_DENSITY) or (debug == ClassDebug.ALL):
+            if debug == ClassDebug.IMAGES_DENSITY:
                 density_map.save(f"{parameters.output_folder_path}/{parameters.density_images_prefix}{(frame+1):05d}.png")
 
             # Calculate the new center
@@ -728,8 +716,7 @@ if __name__ == '__main__':
         logs.cnt_images = (frame + 1)
         log_line = logs.return_output_line(elapsed_time + resume_time, remaining_time)
         print(log_line)
-        if (debug == ClassDebug.ALL) or (debug == ClassDebug.WRITE_LOGS):
-            logs.write_logs(log_line, parameters.logs_pathfile)
+        logs.write_logs(log_line, parameters.logs_pathfile)
 
         # Write resume file
         resume.cnt_images = (frame + 1)
