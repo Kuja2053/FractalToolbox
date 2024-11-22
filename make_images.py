@@ -287,12 +287,18 @@ def find_most_interesting_point(interesting_grid, width_grid, height_grid, cente
 
     return None
 
-def adjust_precision(xmin, xmax, significant_digits):
+def adjust_precision(xmin, xmax, ymin, ymax, significant_digits):
 
-    difference = abs(Decimal(xmax) - Decimal(xmin))     # difference with current precision
+    difference_x = abs(Decimal(xmax) - Decimal(xmin))     # difference with current precision for X
+    difference_y = abs(Decimal(ymax) - Decimal(ymin))  # difference with current precision for X
 
-    magnitude = difference.log10().to_integral_value()
-    precision = significant_digits - int(magnitude)
+    magnitude_x = difference_x.log10().to_integral_value()
+    magnitude_y = difference_y.log10().to_integral_value()
+
+    precision_x = significant_digits - int(magnitude_x)
+    precision_y = significant_digits - int(magnitude_y)
+
+    precision = max(precision_x, precision_y)
     getcontext().prec = precision
 
     return precision
@@ -584,7 +590,7 @@ if __name__ == '__main__':
         start_time_frame = time.time()
 
         # Adapt decimal precision
-        logs.current_precision = adjust_precision(xmin, xmax, parameters.adaptive_decimal_precision)
+        logs.current_precision = adjust_precision(xmin, xmax, ymin, ymax, parameters.adaptive_decimal_precision)
 
         # Initialize image
         im = Image.new("RGB", (parameters.size_x, parameters.size_y), (255, 255, 255))
@@ -695,8 +701,8 @@ if __name__ == '__main__':
             ymin += ((height * inverse_zoom) / 2)
             ymax -= ((height * inverse_zoom) / 2)
 
-        # Manage case without zoom
-        if not inputs[frame].opt_zoom:
+        # Manage case without zoom, neither centering
+        if not inputs[frame].opt_zoom and not inputs[frame].opt_centering:
             if frame < (len(inputs) - 1):
                 xmin = Decimal(inputs[frame + 1].xmin)
                 xmax = Decimal(inputs[frame + 1].xmax)
