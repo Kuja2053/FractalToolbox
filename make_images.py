@@ -101,8 +101,6 @@ class ClassInput():
         self.type_fractal = ClassTypeFractal.JULIA
         self.julia_a = Decimal(0)
         self.julia_b = Decimal(0)
-        self.mandelbrot_dynamic_offset_x = Decimal(0)
-        self.mandelbrot_dynamic_offset_y = Decimal(0)
         self.xmin = 0
         self.xmax = 0
         self.ymin = 0
@@ -112,8 +110,15 @@ class ClassInput():
         self.B = 0
         self.opt_zoom = False
         self.opt_centering = False
+        self.opt_move = False
         self.zoom_amount = 0.0
         self.centering_sigma = 0.0
+        self.centering_up = 0
+        self.centering_down = 0
+        self.centering_left = 0
+        self.centering_right = 0
+        self.move_x = Decimal(0.0)
+        self.move_y = Decimal(0.0)
 
 class ClassLogs:
     def __init__(self):
@@ -267,11 +272,21 @@ def check_density(grid, width, height, threshold):
 
     return density_map, interesting_pixels
 
-def find_most_interesting_point(interesting_grid, width_grid, height_grid, center_x, center_y):
+def find_most_interesting_point(interesting_grid, width_grid, height_grid, center_x, center_y, up, down, left, right):
 
     queue = deque([(center_x, center_y)])
     visited = set()
     visited.add((center_x, center_y))
+
+    directions = []
+    if up:
+        directions.append((0, 1))
+    if down:
+        directions.append((0, -1))
+    if left:
+        directions.append((-1, 0))
+    if right:
+        directions.append((1, 0))
 
     while queue:
         x, y = queue.popleft()
@@ -279,7 +294,7 @@ def find_most_interesting_point(interesting_grid, width_grid, height_grid, cente
         if interesting_grid[x][y] == 1:
             return x, y
 
-        for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+        for dx, dy in directions:
             nx, ny = x + dx, y + dy
             if 0 <= nx < width_grid and 0 <= ny < height_grid and (nx, ny) not in visited:
                 visited.add((nx, ny))
@@ -329,37 +344,45 @@ def ReadInputsFile(inputs_filepath):
                 if local_inputs.type_fractal == ClassTypeFractal.JULIA:
                     local_inputs.julia_a = Decimal(row[1])
                     local_inputs.julia_b = Decimal(row[2])
-                else:
-                    local_inputs.mandelbrot_dynamic_offset_x = Decimal(row[3])
-                    local_inputs.mandelbrot_dynamic_offset_y = Decimal(row[4])
+
+                if row[3] != "":
+                    local_inputs.xmin = float(row[3])
+
+                if row[4] != "":
+                    local_inputs.xmax = float(row[4])
 
                 if row[5] != "":
-                    local_inputs.xmin = float(row[5])
+                    local_inputs.ymin = float(row[5])
 
                 if row[6] != "":
-                    local_inputs.xmax = float(row[6])
+                    local_inputs.ymax = float(row[6])
 
-                if row[7] != "":
-                    local_inputs.ymin = float(row[7])
+                local_inputs.R = int(row[7])
+                local_inputs.G = int(row[8])
+                local_inputs.B = int(row[9])
 
-                if row[8] != "":
-                    local_inputs.ymax = float(row[8])
-
-                local_inputs.R = int(row[9])
-                local_inputs.G = int(row[10])
-                local_inputs.B = int(row[11])
-
-                if "zoom" in row[12].lower():
+                if "zoom" in row[10].lower():
                     local_inputs.opt_zoom = True
 
-                if "centering" in row[12].lower():
+                if "centering" in row[10].lower():
                     local_inputs.opt_centering = True
 
+                if "move" in row[10].lower():
+                    local_inputs.opt_move = True
+
                 if local_inputs.opt_zoom:
-                    local_inputs.zoom_amount = float(row[13])
+                    local_inputs.zoom_amount = float(row[11])
 
                 if local_inputs.opt_centering:
-                    local_inputs.centering_sigma = float(row[14])
+                    local_inputs.centering_sigma = float(row[12])
+
+                local_inputs.centering_up = int(row[13])
+                local_inputs.centering_down = int(row[14])
+                local_inputs.centering_left = int(row[15])
+                local_inputs.centering_right = int(row[16])
+
+                local_inputs.move_x = Decimal(row[17])
+                local_inputs.move_y = Decimal(row[18])
 
                 data.append(local_inputs)
 
@@ -401,8 +424,8 @@ def process_line(line, parameters, inputs, frame, xmin, xmax, ymin, ymax, cores_
 
             i = 1
 
-            x0 = xmin + col * (xmax - xmin) / parameters.size_x + inputs[frame].mandelbrot_dynamic_offset_x
-            y0 = ymax - line * (ymax - ymin) / parameters.size_y + inputs[frame].mandelbrot_dynamic_offset_y
+            x0 = xmin + col * (xmax - xmin) / parameters.size_x
+            y0 = ymax - line * (ymax - ymin) / parameters.size_y
             x = 0
             y = 0
 
@@ -668,7 +691,12 @@ if __name__ == '__main__':
                 density_map.save(f"{parameters.output_folder_path}/{parameters.density_images_prefix}{(frame+1):05d}.png")
 
             # Calculate the new center
-            most_interesting_point = find_most_interesting_point(flags_density, parameters.size_x, parameters.size_y, center_x, center_y)
+            most_interesting_point = find_most_interesting_point(flags_density, parameters.size_x, parameters.size_y,
+                                                                 center_x, center_y,
+                                                                 inputs[frame].centering_up,
+                                                                 inputs[frame].centering_down,
+                                                                 inputs[frame].centering_left,
+                                                                 inputs[frame].centering_right)
             if most_interesting_point == None:
                 print("Terminated prematurely (nothing left to display)")
                 sys.exit(1)
@@ -689,6 +717,15 @@ if __name__ == '__main__':
             logs.nearest_interesting_x = center_x
             logs.nearest_interesting_y = center_y
 
+        # Manage move option
+        if inputs[frame].opt_move:
+
+            # Calculate next move
+            xmin += inputs[frame].move_x
+            xmax += inputs[frame].move_x
+            ymin += inputs[frame].move_y
+            ymax += inputs[frame].move_y
+
         # Manage zoom option
         if inputs[frame].opt_zoom:
 
@@ -701,8 +738,8 @@ if __name__ == '__main__':
             ymin += ((height * inverse_zoom) / 2)
             ymax -= ((height * inverse_zoom) / 2)
 
-        # Manage case without zoom, neither centering
-        if not inputs[frame].opt_zoom and not inputs[frame].opt_centering:
+        # Manage case without zoom, neither centering, neither move
+        if not inputs[frame].opt_zoom and not inputs[frame].opt_centering and not inputs[frame].opt_move:
             if frame < (len(inputs) - 1):
                 xmin = Decimal(inputs[frame + 1].xmin)
                 xmax = Decimal(inputs[frame + 1].xmax)
