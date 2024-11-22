@@ -34,7 +34,6 @@ class ClassParameters:
         self.inputs_pathfile = ""
         self.size_x = 0
         self.size_y = 0
-        self.max_iteration = 0
         self.adaptive_decimal_precision = 0
         self.output_folder_path = ""
         self.output_images_prefix = ""
@@ -50,7 +49,6 @@ class ClassParameters:
         ET.SubElement(root, "inputs_pathfile").text = self.inputs_pathfile
         ET.SubElement(root, "size_x").text = str(self.size_x)
         ET.SubElement(root, "size_y").text = str(self.size_y)
-        ET.SubElement(root, "max_iteration").text = str(self.max_iteration)
         ET.SubElement(root, "adaptive_decimal_precision").text = str(self.adaptive_decimal_precision)
         ET.SubElement(root, "output_folder_path").text = self.output_folder_path
         ET.SubElement(root, "output_images_prefix").text = self.output_images_prefix
@@ -90,7 +88,6 @@ class ClassParameters:
         self.inputs_pathfile = get_text_or_empty(root.find("inputs_pathfile"))
         self.size_x = int(root.find("size_x").text)
         self.size_y = int(root.find("size_y").text)
-        self.max_iteration = int(root.find("max_iteration").text)
         self.adaptive_decimal_precision = int(root.find("adaptive_decimal_precision").text)
         self.output_folder_path = get_text_or_empty(root.find("output_folder_path"))
         self.output_images_prefix = get_text_or_empty(root.find("output_images_prefix"))
@@ -102,6 +99,7 @@ class ClassParameters:
 class ClassInput():
     def __init__(self):
         self.type_fractal = ClassTypeFractal.JULIA
+        self.max_iterations = 0
         self.julia_a = Decimal(0)
         self.julia_b = Decimal(0)
         self.xmin = 0
@@ -344,48 +342,50 @@ def ReadInputsFile(inputs_filepath):
                 else:
                     continue
 
-                if local_inputs.type_fractal == ClassTypeFractal.JULIA:
-                    local_inputs.julia_a = Decimal(row[1])
-                    local_inputs.julia_b = Decimal(row[2])
+                local_inputs.max_iterations = int(row[1])
 
-                if row[3] != "":
-                    local_inputs.xmin = float(row[3])
+                if local_inputs.type_fractal == ClassTypeFractal.JULIA:
+                    local_inputs.julia_a = Decimal(row[2])
+                    local_inputs.julia_b = Decimal(row[3])
 
                 if row[4] != "":
-                    local_inputs.xmax = float(row[4])
+                    local_inputs.xmin = float(row[4])
 
                 if row[5] != "":
-                    local_inputs.ymin = float(row[5])
+                    local_inputs.xmax = float(row[5])
 
                 if row[6] != "":
-                    local_inputs.ymax = float(row[6])
+                    local_inputs.ymin = float(row[6])
 
-                local_inputs.R = int(row[7])
-                local_inputs.G = int(row[8])
-                local_inputs.B = int(row[9])
+                if row[7] != "":
+                    local_inputs.ymax = float(row[7])
 
-                if "zoom" in row[10].lower():
+                local_inputs.R = int(row[8])
+                local_inputs.G = int(row[9])
+                local_inputs.B = int(row[10])
+
+                if "zoom" in row[11].lower():
                     local_inputs.opt_zoom = True
 
-                if "centering" in row[10].lower():
+                if "centering" in row[11].lower():
                     local_inputs.opt_centering = True
 
-                if "move" in row[10].lower():
+                if "move" in row[11].lower():
                     local_inputs.opt_move = True
 
                 if local_inputs.opt_zoom:
-                    local_inputs.zoom_amount = float(row[11])
+                    local_inputs.zoom_amount = float(row[12])
 
                 if local_inputs.opt_centering:
-                    local_inputs.centering_sigma = float(row[12])
+                    local_inputs.centering_sigma = float(row[13])
 
-                local_inputs.centering_up = int(row[13])
-                local_inputs.centering_down = int(row[14])
-                local_inputs.centering_left = int(row[15])
-                local_inputs.centering_right = int(row[16])
+                local_inputs.centering_up = int(row[14])
+                local_inputs.centering_down = int(row[15])
+                local_inputs.centering_left = int(row[16])
+                local_inputs.centering_right = int(row[17])
 
-                local_inputs.move_x = Decimal(row[17])
-                local_inputs.move_y = Decimal(row[18])
+                local_inputs.move_x = Decimal(row[18])
+                local_inputs.move_y = Decimal(row[19])
 
                 data.append(local_inputs)
 
@@ -410,13 +410,13 @@ def process_line(line, parameters, inputs, frame, xmin, xmax, ymin, ymax, cores_
             x = xmin + col * (xmax - xmin) / parameters.size_x
             y = ymax - line * (ymax - ymin) / parameters.size_y
 
-            while i <= parameters.max_iteration and (x ** 2 + y ** 2) <= 4:
+            while i <= inputs[frame].max_iterations and (x ** 2 + y ** 2) <= 4:
                 stock = x
                 x = x ** 2 - y ** 2 + inputs[frame].julia_a
                 y = 2 * stock * y + inputs[frame].julia_b
                 i += 1
 
-            if i > parameters.max_iteration and (x ** 2 + y ** 2) <= 4:
+            if i > inputs[frame].max_iterations and (x ** 2 + y ** 2) <= 4:
                 line_pixels.append((0, 0, 0))
                 line_iterations.append(0)
             else:
@@ -432,13 +432,13 @@ def process_line(line, parameters, inputs, frame, xmin, xmax, ymin, ymax, cores_
             x = 0
             y = 0
 
-            while i <= parameters.max_iteration and (x ** 2 + y ** 2) <= 4:
+            while i <= inputs[frame].max_iterations and (x ** 2 + y ** 2) <= 4:
                 stock = x
                 x = x ** 2 - y ** 2 + x0
                 y = 2 * stock * y + y0
                 i += 1
 
-            if i > parameters.max_iteration and (x ** 2 + y ** 2) <= 4:
+            if i > inputs[frame].max_iterations and (x ** 2 + y ** 2) <= 4:
                 line_pixels.append((0, 0, 0))
                 line_iterations.append(0)
             else:
