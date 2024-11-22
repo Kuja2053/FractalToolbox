@@ -664,7 +664,7 @@ if __name__ == '__main__':
         print("", end="\r")
 
         # Manage centering option
-        if inputs[frame].opt_centering:
+        if (inputs[frame].opt_centering) or (debug == ClassDebug.IMAGES_DENSITY):
 
             # Calculate iterations average
             nb_pixels = (parameters.size_y * parameters.size_x)
@@ -691,26 +691,26 @@ if __name__ == '__main__':
                 density_map.save(f"{parameters.output_folder_path}/{parameters.density_images_prefix}{(frame+1):05d}.png")
 
             # Calculate the new center
-            most_interesting_point = find_most_interesting_point(flags_density, parameters.size_x, parameters.size_y,
-                                                                 center_x, center_y,
-                                                                 inputs[frame].centering_up,
-                                                                 inputs[frame].centering_down,
-                                                                 inputs[frame].centering_left,
-                                                                 inputs[frame].centering_right)
-            if most_interesting_point == None:
-                print("Terminated prematurely (nothing left to display)")
-                sys.exit(1)
+            if inputs[frame].opt_centering:
+                most_interesting_point = find_most_interesting_point(flags_density, parameters.size_x, parameters.size_y,
+                                                                     center_x, center_y,
+                                                                     inputs[frame].centering_up,
+                                                                     inputs[frame].centering_down,
+                                                                     inputs[frame].centering_left,
+                                                                     inputs[frame].centering_right)
+                if most_interesting_point == None:
+                    print("Terminated prematurely (nothing left to display)")
+                    sys.exit(1)
 
-            # Calculate center
-            interesting_x, interesting_y = most_interesting_point
-            fractal_x = (xmin + (interesting_x * ((xmax - xmin) / parameters.size_x)))
-            fractal_y = (ymax - (interesting_y * ((ymax - ymin) / parameters.size_y)))
-            width = xmax - xmin
-            height = ymax - ymin
-            xmin, xmax = (fractal_x - (width / 2)), (fractal_x + (width / 2))
-            ymin, ymax = (fractal_y - (height / 2)), (fractal_y + (height / 2))
+                interesting_x, interesting_y = most_interesting_point
+                fractal_x = (xmin + (interesting_x * ((xmax - xmin) / parameters.size_x)))
+                fractal_y = (ymax - (interesting_y * ((ymax - ymin) / parameters.size_y)))
+                width = xmax - xmin
+                height = ymax - ymin
+                xmin, xmax = (fractal_x - (width / 2)), (fractal_x + (width / 2))
+                ymin, ymax = (fractal_y - (height / 2)), (fractal_y + (height / 2))
 
-            logs.nearest_interesting_x, logs.nearest_interesting_y = most_interesting_point
+                logs.nearest_interesting_x, logs.nearest_interesting_y = most_interesting_point
 
         # Treat case without centering
         if not inputs[frame].opt_centering:
