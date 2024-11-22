@@ -30,6 +30,7 @@ class ClassTypeFractal(Enum):
 
 class ClassParameters:
     def __init__(self):
+        self.description = ""
         self.inputs_pathfile = ""
         self.size_x = 0
         self.size_y = 0
@@ -45,6 +46,7 @@ class ClassParameters:
     def CreateNewProjectFile(self, project_filepath):
         root = ET.Element("Project")
 
+        ET.SubElement(root, "description").text = self.description
         ET.SubElement(root, "inputs_pathfile").text = self.inputs_pathfile
         ET.SubElement(root, "size_x").text = str(self.size_x)
         ET.SubElement(root, "size_y").text = str(self.size_y)
@@ -84,6 +86,7 @@ class ClassParameters:
         def get_text_or_empty(element, default=""):
             return element.text if element is not None and element.text is not None else default
 
+        self.description = get_text_or_empty(root.find("description"))
         self.inputs_pathfile = get_text_or_empty(root.find("inputs_pathfile"))
         self.size_x = int(root.find("size_x").text)
         self.size_y = int(root.find("size_y").text)
@@ -537,6 +540,7 @@ if __name__ == '__main__':
 
     else:
         parameters.load_from_xml(args.project_filepath)
+        print(f"Description: {parameters.description}")
 
         if args.density:
             debug = ClassDebug.IMAGES_DENSITY
