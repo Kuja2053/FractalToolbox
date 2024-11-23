@@ -33,11 +33,11 @@ parameters = ClassParameters()
 if __name__ == '__main__':
 
     # Configuration
-    parameters.input_output_folder_pathname = "Outputs/random_together_v0_v1"
-    parameters.input_output_images_prefix = "julia_random_"
+    parameters.input_output_folder_pathname = "Outputs/mandelbrot_move_v3"
+    parameters.input_output_images_prefix = "mandelbrot_move_"
     parameters.fps = 24
     parameters.reverse_video = 0
-    parameters.output_filename = "julia_random"
+    parameters.output_filename = "mandelbrot_move"
 
     # Sort images for output video
     if parameters.reverse_video == 0:

@@ -10,6 +10,8 @@ from bs4 import BeautifulSoup
 from functools import partial
 from threading import Lock
 from multiprocessing import Pool, Manager
+import struct
+import zipfile
 import argparse
 from collections import deque
 from enum import Enum
@@ -37,6 +39,7 @@ class ClassParameters:
         self.adaptive_decimal_precision = 0
         self.output_folder_path = ""
         self.output_images_prefix = ""
+        self.output_iterations_prefix = ""
         self.density_images_prefix = ""
         self.logs_pathfile = ""
         self.resume_pathfile = ""
@@ -52,6 +55,7 @@ class ClassParameters:
         ET.SubElement(root, "adaptive_decimal_precision").text = str(self.adaptive_decimal_precision)
         ET.SubElement(root, "output_folder_path").text = self.output_folder_path
         ET.SubElement(root, "output_images_prefix").text = self.output_images_prefix
+        ET.SubElement(root, "output_iterations_prefix").text = self.output_iterations_prefix
         ET.SubElement(root, "density_images_prefix").text = self.density_images_prefix
         ET.SubElement(root, "logs_pathfile").text = self.logs_pathfile
         ET.SubElement(root, "resume_pathfile").text = self.resume_pathfile
@@ -91,6 +95,7 @@ class ClassParameters:
         self.adaptive_decimal_precision = int(root.find("adaptive_decimal_precision").text)
         self.output_folder_path = get_text_or_empty(root.find("output_folder_path"))
         self.output_images_prefix = get_text_or_empty(root.find("output_images_prefix"))
+        self.output_iterations_prefix = get_text_or_empty(root.find("output_iterations_prefix"))
         self.density_images_prefix = get_text_or_empty(root.find("density_images_prefix"))
         self.logs_pathfile = get_text_or_empty(root.find("logs_pathfile"))
         self.resume_pathfile = get_text_or_empty(root.find("resume_pathfile"))
@@ -749,6 +754,19 @@ if __name__ == '__main__':
                 xmax = Decimal(inputs[frame + 1].xmax)
                 ymin = Decimal(inputs[frame + 1].ymin)
                 ymax = Decimal(inputs[frame + 1].ymax)
+
+        # Save zipped iterations file with numbering
+        path_bin_iterations_file = f"{parameters.output_folder_path}/{parameters.output_iterations_prefix}{(frame+1):05d}.bin"
+        with open(path_bin_iterations_file, "wb") as iterations_file:
+            for col in range(parameters.size_x):
+                for line in range(parameters.size_y):
+                    iterations_file.write(struct.pack("H", iterations_grid[col][line]))
+
+        with zipfile.ZipFile(f"{path_bin_iterations_file}.zip",
+                             mode="w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as zip_file:
+            zip_file.write(path_bin_iterations_file, arcname=os.path.basename(path_bin_iterations_file))
+
+        os.remove(path_bin_iterations_file)
 
         # Save image with numbering
         im.save(f"{parameters.output_folder_path}/{parameters.output_images_prefix}{(frame+1):05d}.png")
