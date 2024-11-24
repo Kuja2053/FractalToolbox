@@ -46,7 +46,7 @@ class ClassParameters:
         self.fps = 0
 
     def CreateNewProjectFile(self, project_filepath):
-        root = ET.Element("Project")
+        root = ET.Element("Project_images")
 
         ET.SubElement(root, "description").text = self.description
         ET.SubElement(root, "inputs_pathfile").text = self.inputs_pathfile
@@ -493,13 +493,13 @@ def validate_nb_cores_arg(value):
 if __name__ == '__main__':
 
     # Configure arguments detection
-    parser = argparse.ArgumentParser(description="Script used to generates fractals images.")
+    parser = argparse.ArgumentParser(description="Script used to generate fractals images.")
 
     parser.add_argument(
         "project_filepath",
         nargs="?",
         type=str,
-        help="Path to the existing or new project file (use -N or -n option for a new file).",
+        help="Path to an existing project file.",
     )
 
     parser.add_argument(
