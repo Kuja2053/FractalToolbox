@@ -137,10 +137,20 @@ if __name__ == '__main__':
         parameters.output_pathfile += ".mp4"
 
     with imageio.get_writer(parameters.output_pathfile, fps=parameters.fps) as writer:
+        cnt_images = 0
+        string_percent_images = ""
         for filename in images:
             image_path = os.path.join(parameters.input_folder_path, filename)
             image = imageio.v2.imread(image_path)
             writer.append_data(image)
+
+            cnt_images += 1
+            current_percent_images = f"{int(cnt_images / len(images) * 100)}"
+            if current_percent_images != string_percent_images:
+                print("", end="\r")
+                print(f"{cnt_images}/{len(images)}, "
+                      f"{current_percent_images}%", end="")
+                string_percent_images = current_percent_images
 
     # End
     sys.exit(0)
