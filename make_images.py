@@ -511,7 +511,7 @@ if __name__ == '__main__':
     parser.add_argument(
         "--cores",
         type=validate_nb_cores_arg,
-        default=1,
+        default=os.cpu_count(),
         help="Number of cores (1 or up)."
     )
 

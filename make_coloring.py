@@ -4,6 +4,7 @@ import argparse
 import csv
 import zipfile
 import struct
+from multiprocessing import Pool, Manager, Lock
 from PIL import Image
 Image.MAX_IMAGE_PIXELS = None
 
@@ -22,6 +23,19 @@ class ClassInput():
         self.R = 0
         self.G = 0
         self.B = 0
+
+
+
+
+
+
+
+
+# Globales
+lock = Lock()
+
+
+
 
 
 
@@ -66,47 +80,13 @@ def ReadInputsFile(inputs_filepath):
     except:
         return []
 
+def process_image(coloring_input, progress):
 
-
-
-
-
-
-# Main
-if __name__ == '__main__':
-
-    # Configure arguments detection
-    parser = argparse.ArgumentParser(description="Script used to recolor images with iterations files.")
-
-    parser.add_argument(
-        "inputs_filepath",
-        type=str,
-        help="Path to a file containing instructions.",
-    )
-
-    # Parse arguments
-    args = parser.parse_args()
-
-    # Treat the arguments
-    if not os.path.exists(args.inputs_filepath) or not os.path.isfile(args.inputs_filepath):
-        print("Given file does not exist.")
-        sys.exit(0)
-
-    # Read inputs file
-    inputs = ReadInputsFile(args.inputs_filepath)
-    if len(inputs) == 0:
-        print("Error with Inputs file")
-        sys.exit(1)
-
-    # Treat data
-    cnt_images = 0
-    string_percent_images = ""
-    for coloring_input in inputs:
-
+    try:
         # check existence
         if not os.path.exists(coloring_input.input_iteration_pathfile) or not os.path.isfile(coloring_input.input_iteration_pathfile):
             print(f"Error, input file {coloring_input.input_iteration_pathfile} does not exist.")
-            continue
+            return
 
         # Load iteration grid from zip file
         iterations_grid = []
@@ -122,7 +102,7 @@ if __name__ == '__main__':
 
                 if len(content) != (2 * coloring_input.size_x * coloring_input.size_y):
                     print(f"Error, input file {coloring_input.input_iteration_pathfile} has bad size.")
-                    continue
+                    return
 
                 for col in range(0, coloring_input.size_x):
                     for line in range(0, coloring_input.size_y):
@@ -144,13 +124,78 @@ if __name__ == '__main__':
         im.save(coloring_input.output_image_pathfile)
 
         # Display progress
-        cnt_images += 1
-        current_percent_images = f"{int(cnt_images / len(inputs) * 100)}"
-        if current_percent_images != string_percent_images:
-            print("", end="\r")
-            print(f"{cnt_images}/{len(inputs)}, "
-                  f"{current_percent_images}%", end="")
-            string_percent_images = current_percent_images
+        with lock:
+            progress["processed"] += 1
+            current_percent_images = f"{int(progress["processed"] / progress['total'] * 100)}"
+            if current_percent_images != progress["string_percent_images"]:
+                print("", end="\r")
+                print(f"{progress["processed"]}/{progress['total']}, {current_percent_images}%", end="")
+                progress["string_percent_images"] = current_percent_images
+
+    except Exception as e:
+        print(f"Error processing image {coloring_input.output_image_pathfile}: {e}")
+
+def validate_nb_cores_arg(value):
+    try:
+        cores_value = int(value)
+        if cores_value <= 0:
+            raise argparse.ArgumentTypeError("Number of cores must be equal to 1 or up.")
+        return cores_value
+    except ValueError:
+        raise argparse.ArgumentTypeError("Number of cores must be equal to 1 or up.")
+
+
+
+
+
+
+
+
+
+# Main
+if __name__ == '__main__':
+
+    # Configure arguments detection
+    parser = argparse.ArgumentParser(description="Script used to recolor images with iterations files.")
+
+    parser.add_argument(
+        "inputs_filepath",
+        type=str,
+        help="Path to a file containing instructions.",
+    )
+
+    parser.add_argument(
+        "--cores",
+        type=validate_nb_cores_arg,
+        default=os.cpu_count(),
+        help="Number of cores (1 or up)."
+    )
+
+    # Parse arguments
+    args = parser.parse_args()
+
+    # Treat the arguments
+    if not os.path.exists(args.inputs_filepath) or not os.path.isfile(args.inputs_filepath):
+        print("Given file does not exist.")
+        sys.exit(0)
+
+    # Read inputs file
+    inputs = ReadInputsFile(args.inputs_filepath)
+    if len(inputs) == 0:
+        print("Error with Inputs file")
+        sys.exit(1)
+
+    # Multiprocessing setup
+    manager = Manager()
+    progress = manager.dict({
+        "processed": 0,
+        "total": len(inputs),
+        "string_percent_images": ""
+    })
+
+    # Start multiprocessing
+    with Pool(processes=args.cores) as pool:
+        pool.starmap(process_image, [(inp, progress) for inp in inputs])
 
     # End
     sys.exit(0)
