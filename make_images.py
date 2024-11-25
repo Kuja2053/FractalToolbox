@@ -760,7 +760,7 @@ if __name__ == '__main__':
         with open(path_bin_iterations_file, "wb") as iterations_file:
             for col in range(parameters.size_x):
                 for line in range(parameters.size_y):
-                    iterations_file.write(struct.pack("H", iterations_grid[col][line]))
+                    iterations_file.write(struct.pack("<H", iterations_grid[col][line]))
 
         with zipfile.ZipFile(f"{path_bin_iterations_file}.zip",
                              mode="w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as zip_file:
