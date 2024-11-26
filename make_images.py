@@ -10,6 +10,8 @@ from bs4 import BeautifulSoup
 from functools import partial
 from threading import Lock
 from multiprocessing import Pool, Manager
+import psutil
+import time
 import struct
 import zipfile
 import argparse
@@ -403,11 +405,15 @@ def ReadInputsFile(inputs_filepath):
     except:
         return []
 
-def process_line(line, parameters, inputs, frame, xmin, xmax, ymin, ymax, cores_percent):
+def process_line(line, parameters, inputs, frame, xmin, xmax, ymin, ymax, cores_percent, cpu_limit):
     line_pixels = []
     line_iterations = []
 
     for col in range(parameters.size_x):
+
+        if cpu_limit < 100:
+            while psutil.cpu_percent(interval=0.0001) > cpu_limit:
+                time.sleep(0.1)
 
         if inputs[frame].type_fractal == ClassTypeFractal.JULIA:
 
@@ -461,14 +467,15 @@ def process_line(line, parameters, inputs, frame, xmin, xmax, ymin, ymax, cores_
 
     return line_pixels, line_iterations
 
-def process_block(block_range, parameters, inputs, frame, xmin, xmax, ymin, ymax, cores_percent):
+def process_block(block_range, parameters, inputs, frame, xmin, xmax, ymin, ymax, cores_percent, cpu_limit):
     min_line, max_line = block_range
     block_pixels = []
     block_iterations = []
 
     for line in range(min_line, max_line):
         line_pixels, line_iterations = process_line(line, parameters=parameters, inputs=inputs, frame=frame,
-                                                    xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax, cores_percent=cores_percent)
+                                                    xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax,
+                                                    cores_percent=cores_percent, cpu_limit=cpu_limit)
         block_pixels.append(line_pixels)
         block_iterations.append(line_iterations)
 
@@ -483,6 +490,14 @@ def validate_nb_cores_arg(value):
     except ValueError:
         raise argparse.ArgumentTypeError("Number of cores must be equal to 1 or up.")
 
+def validate_cpu_arg(value):
+    try:
+        cpu_value = int(value)
+        if (cpu_value <= 0) or (cpu_value > 100):
+            raise argparse.ArgumentTypeError("CPU limit must be between 1 and 100.")
+        return cpu_value
+    except ValueError:
+        raise argparse.ArgumentTypeError("CPU limit must be between 1 and 100.")
 
 
 
@@ -513,6 +528,13 @@ if __name__ == '__main__':
         type=validate_nb_cores_arg,
         default=os.cpu_count(),
         help="Number of cores (1 or up)."
+    )
+
+    parser.add_argument(
+        "--cpu",
+        type=validate_cpu_arg,
+        default=100,
+        help="CPU limitation in percent."
     )
 
     # Parse arguments
@@ -653,7 +675,7 @@ if __name__ == '__main__':
         })
 
         func = partial(process_block, parameters=parameters, inputs=inputs, frame=frame,
-                       xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax, cores_percent=cores_percent)
+                       xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax, cores_percent=cores_percent, cpu_limit=args.cpu)
 
         blocks = [(i * lines_per_core, min((i + 1) * lines_per_core, parameters.size_y))
                   for i in range(args.cores)]
