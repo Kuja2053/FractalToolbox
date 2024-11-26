@@ -5,6 +5,8 @@ import csv
 import zipfile
 import struct
 from multiprocessing import Pool, Manager, Lock
+import psutil
+import time
 from PIL import Image
 Image.MAX_IMAGE_PIXELS = None
 
@@ -80,9 +82,10 @@ def ReadInputsFile(inputs_filepath):
     except:
         return []
 
-def process_image(coloring_input, progress):
+def process_image(coloring_input, progress, cpu_limit):
 
     try:
+
         # check existence
         if not os.path.exists(coloring_input.input_iteration_pathfile) or not os.path.isfile(coloring_input.input_iteration_pathfile):
             print(f"Error, input file {coloring_input.input_iteration_pathfile} does not exist.")
@@ -115,7 +118,13 @@ def process_image(coloring_input, progress):
         pixels = im.load()
 
         for col in range(0, coloring_input.size_x):
+
+            if cpu_limit < 100:
+                while psutil.cpu_percent(interval=0.0001) > cpu_limit:
+                    time.sleep(0.2)
+
             for line in range(0, coloring_input.size_y):
+
                 nb_iterations = iterations_grid[col][line]
                 pixels[col, line] = ((coloring_input.R * nb_iterations) % 256,
                                      (coloring_input.G * nb_iterations) % 256,
@@ -144,10 +153,14 @@ def validate_nb_cores_arg(value):
     except ValueError:
         raise argparse.ArgumentTypeError("Number of cores must be equal to 1 or up.")
 
-
-
-
-
+def validate_cpu_arg(value):
+    try:
+        cpu_value = int(value)
+        if (cpu_value <= 0) or (cpu_value > 100):
+            raise argparse.ArgumentTypeError("CPU limit must be between 1 and 100.")
+        return cpu_value
+    except ValueError:
+        raise argparse.ArgumentTypeError("CPU limit must be between 1 and 100.")
 
 
 
@@ -169,6 +182,13 @@ if __name__ == '__main__':
         type=validate_nb_cores_arg,
         default=os.cpu_count(),
         help="Number of cores (1 or up)."
+    )
+
+    parser.add_argument(
+        "--cpu",
+        type=validate_cpu_arg,
+        default=100,
+        help="CPU limitation in percent."
     )
 
     # Parse arguments
@@ -195,7 +215,7 @@ if __name__ == '__main__':
 
     # Start multiprocessing
     with Pool(processes=args.cores) as pool:
-        pool.starmap(process_image, [(inp, progress) for inp in inputs])
+        pool.starmap(process_image, [(inp, progress, args.cpu) for inp in inputs])
 
     # End
     sys.exit(0)
