@@ -247,7 +247,7 @@ class ClassEMA:
 
 # Globales
 debug = ClassDebug.NONE
-lock = Lock()
+lock_cores_percent = Lock()
 parameters = ClassParameters()
 logs = ClassLogs()
 resume = ClassResume()
@@ -405,15 +405,15 @@ def ReadInputsFile(inputs_filepath):
     except:
         return []
 
-def process_line(line, parameters, inputs, frame, xmin, xmax, ymin, ymax, cores_percent, cpu_limit):
+def process_line(line, parameters, inputs, frame, xmin, xmax, ymin, ymax, cores_percent_manager, cpu_limit):
     line_pixels = []
     line_iterations = []
 
-    for col in range(parameters.size_x):
+    if cpu_limit < 100:
+        while psutil.cpu_percent(interval=0.0001) > cpu_limit:
+            time.sleep(0.4)
 
-        if cpu_limit < 100:
-            while psutil.cpu_percent(interval=0.0001) > cpu_limit:
-                time.sleep(0.1)
+    for col in range(parameters.size_x):
 
         if inputs[frame].type_fractal == ClassTypeFractal.JULIA:
 
@@ -456,18 +456,19 @@ def process_line(line, parameters, inputs, frame, xmin, xmax, ymin, ymax, cores_
                 line_pixels.append(((inputs[frame].R * i) % 256, (inputs[frame].G * i) % 256, (inputs[frame].B * i) % 256))
                 line_iterations.append(i)
 
-    with lock:
-        cores_percent['cnt_points'] += cores_percent['nb_points_per_update']
-        current_percent_points = f"{int(cores_percent['cnt_points'] / cores_percent['nb_points'] * 100)}"
-        if current_percent_points != cores_percent['string_percent_points']:
+
+    with lock_cores_percent:
+        cores_percent_manager['cnt_points'] += cores_percent_manager['nb_points_per_update']
+        current_percent_points = f"{int(cores_percent_manager['cnt_points'] / cores_percent_manager['nb_points'] * 100)}"
+        if current_percent_points != cores_percent_manager['string_percent_points']:
             print("", end="\r")
-            print(f"{(cores_percent['cnt_images'] + 1)}/{cores_percent['nb_images']}, "
+            print(f"{(cores_percent_manager['cnt_images'] + 1)}/{cores_percent_manager['nb_images']}, "
                   f"{current_percent_points}%", end="")
-            cores_percent['string_percent_points'] = current_percent_points
+            cores_percent_manager['string_percent_points'] = current_percent_points
 
     return line_pixels, line_iterations
 
-def process_block(block_range, parameters, inputs, frame, xmin, xmax, ymin, ymax, cores_percent, cpu_limit):
+def process_block(block_range, parameters, inputs, frame, xmin, xmax, ymin, ymax, cores_percent_manager, cpu_limit):
     min_line, max_line = block_range
     block_pixels = []
     block_iterations = []
@@ -475,7 +476,7 @@ def process_block(block_range, parameters, inputs, frame, xmin, xmax, ymin, ymax
     for line in range(min_line, max_line):
         line_pixels, line_iterations = process_line(line, parameters=parameters, inputs=inputs, frame=frame,
                                                     xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax,
-                                                    cores_percent=cores_percent, cpu_limit=cpu_limit)
+                                                    cores_percent_manager=cores_percent_manager, cpu_limit=cpu_limit)
         block_pixels.append(line_pixels)
         block_iterations.append(line_iterations)
 
@@ -664,8 +665,8 @@ if __name__ == '__main__':
 
         lines_per_core = math.ceil(parameters.size_y / args.cores)
 
-        manager = Manager()
-        cores_percent = manager.dict({
+        manager_for_cores_percent = Manager()
+        cores_percent_manager = manager_for_cores_percent.dict({
             "cnt_points": 0,
             "nb_points": (parameters.size_x * parameters.size_y),
             "nb_points_per_update": parameters.size_x,
@@ -675,7 +676,7 @@ if __name__ == '__main__':
         })
 
         func = partial(process_block, parameters=parameters, inputs=inputs, frame=frame,
-                       xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax, cores_percent=cores_percent, cpu_limit=args.cpu)
+                       xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax, cores_percent_manager=cores_percent_manager, cpu_limit=args.cpu)
 
         blocks = [(i * lines_per_core, min((i + 1) * lines_per_core, parameters.size_y))
                   for i in range(args.cores)]
@@ -796,6 +797,8 @@ if __name__ == '__main__':
 
         # Get elapsed time for logs and resume
         elapsed_time = (time.time() - start_time)
+
+        # Get remaining time for logs
         duration_per_frame = EMA_duration_per_image.add_value(time.time() - start_time_frame)
         remaining_time = (duration_per_frame * (len(inputs) - (frame + 1)))
 
