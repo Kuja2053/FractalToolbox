@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project_video>
+ <description>Project to create video about Julia fractal with zoom out at 24 fps.</description>
+ <input_folder_path>Examples/Outputs/julia_zoom</input_folder_path>
+ <input_images_prefix>julia_images_</input_images_prefix>
+ <fps>24</fps>
+ <reverse_video>1</reverse_video>
+ <output_pathfile>Examples/Outputs/julia_zoom/julia_zoom_out.mp4</output_pathfile>
+</Project_video>

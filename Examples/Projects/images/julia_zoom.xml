@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project_images>
+ <description>Julia, zoom in to show the infinity of fractals.</description>
+ <inputs_pathfile>Examples/Inputs/Outputs/julia_zoom.csv</inputs_pathfile>
+ <size_x>1920</size_x>
+ <size_y>1088</size_y>
+ <adaptive_decimal_precision>6</adaptive_decimal_precision>
+ <output_folder_path>Examples/Outputs/julia_zoom</output_folder_path>
+ <output_images_prefix>julia_images_</output_images_prefix>
+ <output_iterations_prefix>julia_iterations_</output_iterations_prefix>
+ <density_images_prefix>julia_density_</density_images_prefix>
+ <logs_pathfile>Examples/Outputs/julia_zoom/logs.txt</logs_pathfile>
+ <resume_pathfile>Examples/Outputs/julia_zoom/resume.xml</resume_pathfile>
+ <fps>24</fps>
+</Project_images>
