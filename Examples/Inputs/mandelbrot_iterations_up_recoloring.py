@@ -1,3 +1,21 @@
+# Fractal Toolbox is a series of python scripts for generating images
+# and videos based on Julia and Mandelbrot sets.
+# Copyright (C) 2024  Vivien ELIE
+#
+# This file is part of Fractal Toolbox.
+#
+# Fractal Toolbox is free software: you can redistribute it and/or modify it under the terms
+# of the GNU General Public License as published by the Free Software Foundation,
+# either version 3 of the License, or (at your option) any later version.
+#
+# Fractal Toolbox is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+# without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+# See the GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along with Fractal Toolbox.
+# If not, see <https://www.gnu.org/licenses/>.
+
+
 import sys
 import os
 import csv
@@ -129,8 +147,8 @@ if __name__ == '__main__':
     cnt_iterations = 0
     for filename in iterations:
         output_filename = filename.replace(parameters.input_iterations_prefix, parameters.output_images_prefix).replace(".bin.zip", ".png")
-        data.append([os.path.join("Examples/" + parameters.input_output_folder_path, filename),
-                     os.path.join("Examples/" + parameters.input_output_folder_path, output_filename),
+        data.append([os.path.join("../Examples/" + parameters.input_output_folder_path, filename),
+                     os.path.join("../Examples/" + parameters.input_output_folder_path, output_filename),
                      str(parameters.size_x),
                      str(parameters.size_y),
                      str(int(r[cnt_iterations])),

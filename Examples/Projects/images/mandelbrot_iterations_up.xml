@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project_images>
  <description>Mandelbrot, show the impact of slowly increasing the number of maximum iterations.</description>
- <inputs_pathfile>Examples/Inputs/Outputs/mandelbrot_iterations_up.csv</inputs_pathfile>
+ <inputs_pathfile>../Examples/Inputs/Outputs/mandelbrot_iterations_up.csv</inputs_pathfile>
  <size_x>1920</size_x>
  <size_y>1088</size_y>
  <adaptive_decimal_precision>6</adaptive_decimal_precision>
- <output_folder_path>Examples/Outputs/mandelbrot_iterations_up</output_folder_path>
+ <output_folder_path>../Examples/Outputs/mandelbrot_iterations_up</output_folder_path>
  <output_images_prefix>mandelbrot_images_</output_images_prefix>
  <output_iterations_prefix>mandelbrot_iterations_</output_iterations_prefix>
  <density_images_prefix>mandelbrot_density_</density_images_prefix>
- <logs_pathfile>Examples/Outputs/mandelbrot_iterations_up/logs.txt</logs_pathfile>
- <resume_pathfile>Examples/Outputs/mandelbrot_iterations_up/resume.xml</resume_pathfile>
+ <logs_pathfile>../Examples/Outputs/mandelbrot_iterations_up/logs.txt</logs_pathfile>
+ <resume_pathfile>../Examples/Outputs/mandelbrot_iterations_up/resume.xml</resume_pathfile>
  <fps>24</fps>
 </Project_images>

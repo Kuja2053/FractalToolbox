@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project_video>
  <description>Project to create video about Mandelbrot fractal with iterations increasing at 24 fps.</description>
- <input_folder_path>Examples/Outputs/mandelbrot_iterations_up</input_folder_path>
+ <input_folder_path>../Examples/Outputs/mandelbrot_iterations_up</input_folder_path>
  <input_images_prefix>mandelbrot_images_</input_images_prefix>
  <fps>24</fps>
  <reverse_video>0</reverse_video>
- <output_pathfile>Examples/Outputs/mandelbrot_iterations_up/mandelbrot_iterations_up.mp4</output_pathfile>
+ <output_pathfile>../Examples/Outputs/mandelbrot_iterations_up/mandelbrot_iterations_up.mp4</output_pathfile>
 </Project_video>
