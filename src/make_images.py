@@ -20,7 +20,6 @@ import os
 import shutil
 import math
 import sys
-import time
 import csv
 from decimal import Decimal, getcontext
 import xml.etree.ElementTree as ET
