@@ -75,6 +75,27 @@ to suit your creativity.
 
 ## Gallery
 
+![galley_julia_01](Gallery/galley_julia_01.png)
+![galley_julia_02](Gallery/galley_julia_02.png)
+![galley_julia_03](Gallery/galley_julia_03.png)
+![galley_julia_04](Gallery/galley_julia_04.png)
+![galley_julia_05](Gallery/galley_julia_05.png)
+![galley_julia_06](Gallery/galley_julia_06.png)
+![galley_julia_07](Gallery/galley_julia_07.png)
+![galley_julia_08](Gallery/galley_julia_08.png)
+![galley_julia_09](Gallery/galley_julia_09.png)
+![galley_julia_10](Gallery/galley_julia_10.png)
+![galley_julia_11](Gallery/galley_julia_11.png)
+![galley_julia_12](Gallery/galley_julia_12.png)
+![galley_julia_13](Gallery/galley_julia_13.png)
+![galley_julia_14](Gallery/galley_julia_14.png)
+![galley_julia_15](Gallery/galley_julia_15.png)
+![galley_julia_16](Gallery/galley_julia_16.png)
+![galley_mandelbrot_01](Gallery/galley_mandelbrot_01.png)
+![galley_mandelbrot_02](Gallery/galley_mandelbrot_02.png)
+
+
+
 Here are some examples of fractal videos created using the Fractal Toolbox :  
   
 
